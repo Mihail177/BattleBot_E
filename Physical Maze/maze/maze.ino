@@ -1,11 +1,11 @@
-#define neckServo 13
+#define neckServo 7
 #define neckRight 400
 #define neckCenter 1300
 #define neckLeft 2300
 
 
-#define trigPin 7
-#define echoPin 12
+const int trigPin = 13;
+const int echoPin = 12;
 
 #define gripper_pin 11
 
@@ -37,7 +37,7 @@ int checkDistance() {
     digitalWrite(trigPin, HIGH);
     delayMicroseconds(10);
     digitalWrite(trigPin, LOW);
-    duration = pulseIn(trigPin, HIGH);
+    duration = pulseIn(echoPin, HIGH);
     return duration * 0.034 / 2;
 }
 
@@ -148,7 +148,7 @@ void loop() {
 
   distanceLeft = checkDistance();
 
-  Serial.println(checkDistance());
+  Serial.println(distanceLeft);
 
 //  if(distanceLeft > 25)
 //  {

@@ -32,6 +32,9 @@ void ISR_encoderCountRight() {
   encoderCountRight++;
 }
 
+void releaseObject();
+int calculateLineThreshold();
+
 void setup() {
   pinMode(motorA1, OUTPUT);
   pinMode(motorA2, OUTPUT);
@@ -49,11 +52,11 @@ void setup() {
 
   Serial.begin(9600);
   while (!Serial); 
-  releaseObject();  // gripper open
+   releaseObject();  // gripper open
   calculateLineThreshold(); //Calculating white line with sensors
 }
 
-}
+
 
 void loop() {
   calculateLineThreshold(); // If you want to use adaptive treshold but not static, this function should be placed everywhere instead of variable

@@ -4,8 +4,11 @@
 #define neckLeft 2300
 
 
-const int trigPin = 13;
-const int echoPin = 12;
+#define trigPinForward 8
+#define echoPinForward 12
+
+#define trigPinLeft 4
+#define echoPinLeft A5
 
 #define gripper_pin 11
 
@@ -20,12 +23,16 @@ const int echoPin = 12;
 volatile int ticksLeft = 0; 
 volatile int ticksRight = 0; 
 
-int distanceLeft;
-int distanceForward;
+int distanceLeft = 0;
+int distanceForward = 0;
 boolean isDistanceForwardReached = false;
-long duration;
+long duration = 0;
 
-
+void wait(int waitingTime) {
+  int time = millis();
+  while(millis() < time + waitingTime){
+    }
+}
 
 void servoTurn(int angle) {
     digitalWrite(neckServo, HIGH);
@@ -33,7 +40,9 @@ void servoTurn(int angle) {
     digitalWrite(neckServo, LOW);
 }
 
-int checkDistance() {
+int checkDistance(int trigPin, int echoPin) {
+    digitalWrite(trigPin, LOW);
+    delayMicroseconds(10);
     digitalWrite(trigPin, HIGH);
     delayMicroseconds(10);
     digitalWrite(trigPin, LOW);
@@ -41,17 +50,30 @@ int checkDistance() {
     return duration * 0.034 / 2;
 }
 
+
+
+
+
+
 void tickLeft() {
-  ticksLeft++; 
+  ticksLeft++;
 }
 
 void tickRight() {
   ticksRight++;
 }
 
+void idle()
+{
+  analogWrite(leftB, 0);
+  analogWrite(leftF, 0);
+  analogWrite(rightF, 0);
+  analogWrite(rightB, 0);
+}
+
 void driveForward(int distance) {
-  int rightTicksRemaining = (distance - 10) * 31;
-  int leftTicksRemaining = (distance - 10) * 36;
+  int rightTicksRemaining = (distance - 7) * 31;
+  int leftTicksRemaining = (distance - 7) * 35;
 
   int currentLeftTicks = 0;
   int currentRightTicks = 0;
@@ -62,31 +84,31 @@ void driveForward(int distance) {
   interrupts(); // Exit critical section
   
   
-  if (currentLeftTicks > leftTicksRemaining || currentRightTicks > rightTicksRemaining) {
+  if (currentLeftTicks >= leftTicksRemaining || currentRightTicks >= rightTicksRemaining) {
     idle();
   } else {
-    Serial.print("Left: ");
-    Serial.print(currentLeftTicks);
-    Serial.print(", Right: ");
-    Serial.println(currentRightTicks);
     analogWrite(leftF, 240); 
     analogWrite(rightF, 255);
   }
+  
 }
 
 void turnLeft()
 {
-  int currentRightTicks;
+  int currentLeftTicks = 0;
+  int currentRightTicks = 0;
   
   noInterrupts(); // Enter critical section
-  currentRightTicks = ticksRight; // Read left ticks
+  currentLeftTicks = ticksLeft; // Read left ticks
+  currentRightTicks = ticksRight; // Read right ticks
   interrupts(); // Exit critical section
   
-  if (currentRightTicks > 31) {
+  
+  if (currentLeftTicks > 32 || currentRightTicks > 32) {
+    isDistanceForwardReached = false;
     idle();
   } else {
-    Serial.print("Right: ");
-    Serial.print(currentRightTicks);
+    analogWrite(leftF, 0); 
     analogWrite(rightF, 255);
   }
 }
@@ -102,34 +124,22 @@ void turnBack()
   interrupts(); // Exit critical section
   
   
-  if (currentLeftTicks > 36 || currentRightTicks > 31) {
-    isDistanceForwardReached = true;
+  if (currentLeftTicks >= 38 || currentRightTicks >= 32) {
+    isDistanceForwardReached = false;
     idle();
   } else {
-    Serial.print("Left: ");
-    Serial.print(currentLeftTicks);
-    Serial.print(", Right: ");
-    Serial.println(currentRightTicks);
-    analogWrite(leftB, 240); 
-    analogWrite(rightF, 255);
+    analogWrite(leftF, 240); 
+    analogWrite(rightB, 255);
   }
 }
-
-void idle()
-{
-  analogWrite(leftB, 0);
-  analogWrite(leftF, 0);
-  analogWrite(rightF, 0);
-  analogWrite(rightB, 0);
-}
-
-
 
 void setup() {
     Serial.begin(9600);
     pinMode(neckServo, OUTPUT);
-    pinMode(trigPin, OUTPUT);
-    pinMode(echoPin, INPUT);
+    pinMode(trigPinForward, OUTPUT);
+    pinMode(echoPinForward, INPUT);
+    pinMode(trigPinLeft, OUTPUT);
+    pinMode(echoPinLeft, INPUT);
     pinMode(leftB, OUTPUT);
     pinMode(leftF, OUTPUT);
     pinMode(rightF, OUTPUT);
@@ -139,29 +149,39 @@ void setup() {
 
     attachInterrupt(digitalPinToInterrupt(rotaryLeft), tickLeft, CHANGE);
     attachInterrupt(digitalPinToInterrupt(rotaryRight), tickRight, CHANGE);
+    servoTurn(neckCenter);
 }
 
 void loop() {
-  digitalWrite(trigPin, LOW);
-  delayMicroseconds(10);
-  servoTurn(neckLeft);
-
-  distanceLeft = checkDistance();
-
-  Serial.println(distanceLeft);
-
-//  if(distanceLeft > 25)
-//  {
-//    turnLeft();
-//    distanceForward = distanceLeft;
-//    driveForward(distanceForward);
-//  }else if(distanceLeft < 25 && isDistanceForwardReached)
-//  {
-//    turnBack();
-//  }
-
-//driveForward(15);
   
+
+  distanceForward = checkDistance(trigPinForward, echoPinForward);
+  distanceLeft = checkDistance(trigPinLeft, echoPinLeft);
+
+//  Serial.print("Forward:");
+//  Serial.println(distanceForward);
+//  Serial.print("Left:");
+//  Serial.println(distanceLeft);
+  
+
+  
+  
+  if(distanceLeft >= 15)
+  {
+    turnLeft();
+    wait(200);
+  }
+  if(distanceLeft < 15 && distanceForward >= 15)
+  {
+    driveForward(distanceForward); 
+    wait(200);
+  }
+  if(distanceLeft < 15 && distanceForward <= 15)
+  {
+    turnBack();
+    wait(200);
+  }
+
   
 
 }

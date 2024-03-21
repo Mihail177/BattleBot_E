@@ -23,6 +23,8 @@
 volatile int ticksLeft = 0; 
 volatile int ticksRight = 0; 
 
+boolean hasStarted = true;
+
 int distanceLeft = 0;
 int distanceForward = 0;
 boolean isDistanceForwardReached = false;
@@ -153,35 +155,27 @@ void setup() {
 }
 
 void loop() {
-  
 
-  distanceForward = checkDistance(trigPinForward, echoPinForward);
-  distanceLeft = checkDistance(trigPinLeft, echoPinLeft);
+ distanceForward = checkDistance(trigPinForward, echoPinForward);
+ distanceLeft = checkDistance(trigPinLeft, echoPinLeft);
 
-//  Serial.print("Forward:");
-//  Serial.println(distanceForward);
-//  Serial.print("Left:");
-//  Serial.println(distanceLeft);
-  
 
-  
-  
-  if(distanceLeft >= 15)
-  {
+
+  if (distanceLeft > 15) {
+    ticksLeft = 0;
+    ticksRight = 0;
     turnLeft();
-    wait(200);
-  }
-  if(distanceLeft < 15 && distanceForward >= 15)
-  {
-    driveForward(distanceForward); 
-    wait(200);
-  }
-  if(distanceLeft < 15 && distanceForward <= 15)
-  {
+  } else if (distanceForward < 15 && distanceLeft < 15) {
+    ticksLeft = 0;
+    ticksRight = 0;
     turnBack();
-    wait(200);
+
+  } else {
+    ticksLeft = 0;
+    ticksRight = 0;
+    driveForward(distanceForward);
+    
   }
 
-  
-
+  delayMicroseconds(200);
 }

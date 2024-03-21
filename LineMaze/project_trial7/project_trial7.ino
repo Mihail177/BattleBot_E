@@ -78,18 +78,6 @@ void loop() {
 
 //Movements
 
-void turnLeft(){
-  countL=0;
-  countR=0;
-  stop();
-  while(countL < 20 && countR < 20){
-    analogWrite(leftP, 255);
-    analogWrite(leftN, 0);
-    analogWrite(rightP, 0);
-    analogWrite(rightN, 255);
-  }
-  stop();
-}
 
 void turnRight(){
   countL=0;
@@ -105,7 +93,7 @@ void turnRight(){
 }
 
 
-void turn(){
+void moveForwardBeforeTurn(){
   countL=0;
   countR=0;
   while(countL < 12 && countR < 12){
@@ -171,13 +159,13 @@ void solveMaze(){
     getSensorsValues();
     
     if(sensors[7]){
-      turn();
+      moveForwardBeforeTurn();
       turnRight();
       }
       
     else if(!sensors[0] && !sensors[1] && !sensors[2] && !sensors[3] && !sensors[4]&& !sensors[5] && !sensors[6] && !sensors[7]){
       if (turnL==0){
-        turn();
+        moveForwardBeforeTurn();
         }     
       turnLeft();
       turnL++;
@@ -261,8 +249,6 @@ void performLineCountingAndGrabbing() { //Function for grabbing and starting
     int lineDetected = checkLines();
     if (lineDetected) {
       lineCount++;
-      Serial.print("Line Count: ");
-      Serial.println(lineCount);
       delay(200); 
     }
   }
@@ -270,7 +256,8 @@ void performLineCountingAndGrabbing() { //Function for grabbing and starting
     stop();
     grabObject();
     delay(500); // Delay to showcase the grab action
-    turnLeft90Degrees(); // Turn left 90 degrees after grabbing the object
+    turnLeft();// Turn left 90 degrees after grabbing the object
+    turnL++;
     shouldPerformLineCountingAndGrabbing = false;
     lineCount++; // Increment to prevent re-entering this block
   }
@@ -294,7 +281,7 @@ void controlGripper(int pulseWidth) { //Function to control gripper without Serv
   }
 }
 
-void turnLeft90Degrees() {
+void turnLeft() {
   int sensorValue0, sensorValue1, sensorValue2, sensorValue3, sensorValueA7, sensorValueA5;
 
   // Start turning

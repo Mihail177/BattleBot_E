@@ -1,10 +1,21 @@
 #include <SoftwareSerial.h>
+#include <Adafruit_NeoPixel.h>
 
 boolean hasInitiatedStart = false;
 boolean hasStarted = false;
 
 const int lineSensors[] = {A0, A1, A2, A3, A4,A6, A7};
 int lineSensorSensitivity = 700;
+
+#define PIN 13
+#define NUMPIXELS 4
+
+#define LEFT_BACK_LED 0
+#define LEFT_FRONT_LED 3
+#define RIGHT_BACK_LED 1
+#define RIGHT_FRONT_LED 2
+
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
 
 //===[ Gripper ]===================================
 const int GRIPPER_PIN=11;
@@ -67,31 +78,68 @@ void setup_motor_pins()
   pinMode(motorLeftBackwards,OUTPUT);
   pinMode(motorLeftForward,OUTPUT);
 }
-void moveForward()
+void moveForward() // shows green
 {
+  strip.setPixelColor(LEFT_BACK_LED, strip.Color(255, 0, 0));
+  strip.setPixelColor(LEFT_FRONT_LED, strip.Color(255, 0, 0));
+  strip.setPixelColor(RIGHT_BACK_LED, strip.Color(255, 0, 0));
+  strip.setPixelColor(RIGHT_FRONT_LED, strip.Color(255, 0, 0));
+  strip.show();
+  
   analogWrite(motorLeftForward,230);
   analogWrite(motorRightForward,255);
   analogWrite(motorRightBackwards,0);
   analogWrite(motorLeftBackwards,0);
 }
 
-void moveBackwardsRotate()
+void moveBackwardsRotateRight()
 {
+  strip.setPixelColor(LEFT_BACK_LED, strip.Color(204, 204, 0));
+  strip.setPixelColor(LEFT_FRONT_LED, strip.Color(204, 204, 0));
+  strip.setPixelColor(RIGHT_BACK_LED, strip.Color(0, 0, 255));
+  strip.setPixelColor(RIGHT_FRONT_LED, strip.Color(0, 0, 255));
+  strip.show();
+  
   analogWrite(motorRightBackwards,255);
   analogWrite(motorLeftBackwards,90);
   analogWrite(motorRightForward, 0);
   analogWrite(motorLeftForward,0);
 }
 
+void moveBackwardsRotateLeft()
+{
+  strip.setPixelColor(LEFT_BACK_LED, strip.Color(0, 0, 255));
+  strip.setPixelColor(LEFT_FRONT_LED, strip.Color(0, 0, 255));
+  strip.setPixelColor(RIGHT_BACK_LED, strip.Color(204, 204, 0));
+  strip.setPixelColor(RIGHT_FRONT_LED, strip.Color(204, 204, 0));
+  strip.show();
+  analogWrite(motorRightBackwards,90);
+  analogWrite(motorLeftBackwards,255);
+  analogWrite(motorRightForward, 0);
+  analogWrite(motorLeftForward,0);
+}
+
 void moveBackwards()
 {
-  analogWrite(motorRightBackwards,200);
+  strip.setPixelColor(LEFT_BACK_LED, strip.Color(0, 0, 255));
+  strip.setPixelColor(LEFT_FRONT_LED, strip.Color(0, 0, 255));
+  strip.setPixelColor(RIGHT_BACK_LED, strip.Color(0, 0, 255));
+  strip.setPixelColor(RIGHT_FRONT_LED, strip.Color(0, 0, 255));
+  strip.show();
+  
+  analogWrite(motorRightBackwards,240);
   analogWrite(motorLeftBackwards, 255);
   analogWrite(motorRightForward, 0);
   analogWrite(motorLeftForward,0);
 }
 
 void stopRobot() {
+  strip.setPixelColor(LEFT_BACK_LED, strip.Color(0, 255, 0));
+  strip.setPixelColor(LEFT_FRONT_LED, strip.Color(0, 255, 0));
+  strip.setPixelColor(RIGHT_BACK_LED, strip.Color(0, 255, 0));
+  strip.setPixelColor(RIGHT_FRONT_LED, strip.Color(0, 255, 0));
+  strip.show();
+  
   analogWrite(motorRightBackwards,0);
   analogWrite(motorRightForward, 0);
   analogWrite(motorLeftBackwards, 0);
@@ -99,8 +147,12 @@ void stopRobot() {
 }
 void turnLeft()
 {
-//  leds.fill(RED, 0, 4);
-//  leds.show();
+  strip.setPixelColor(LEFT_BACK_LED, strip.Color(0, 255, 0));
+  strip.setPixelColor(LEFT_FRONT_LED, strip.Color(0, 255, 0));
+  strip.setPixelColor(RIGHT_BACK_LED, strip.Color(255, 0, 0));
+  strip.setPixelColor(RIGHT_FRONT_LED, strip.Color(255, 0, 0));
+  strip.show();
+  
   analogWrite(motorLeftBackwards,0);
   analogWrite(motorLeftForward, 0);
   analogWrite(motorRightForward, 255);
@@ -108,8 +160,12 @@ void turnLeft()
 }
 void rotateOnAxis()
 {
-//  leds.fill(RED, 0, 4);
-//  leds.show();
+  strip.setPixelColor(LEFT_BACK_LED, strip.Color(0, 0, 255));
+  strip.setPixelColor(LEFT_FRONT_LED, strip.Color(0, 0, 255));
+  strip.setPixelColor(RIGHT_BACK_LED, strip.Color(255, 0, 0));
+  strip.setPixelColor(RIGHT_FRONT_LED, strip.Color(255, 0, 0));
+  strip.show();
+  
   analogWrite(motorLeftBackwards,240);
   analogWrite(motorLeftForward, 0);
   analogWrite(motorRightForward, 255);
@@ -117,6 +173,12 @@ void rotateOnAxis()
 }
 void rotateCounterAxis()
 {
+  strip.setPixelColor(LEFT_BACK_LED, strip.Color(255, 0, 0));
+  strip.setPixelColor(LEFT_FRONT_LED, strip.Color(255, 0, 0));
+  strip.setPixelColor(RIGHT_BACK_LED, strip.Color(0, 0, 255));
+  strip.setPixelColor(RIGHT_FRONT_LED, strip.Color(0, 0, 255));
+  strip.show();
+  
   analogWrite(motorLeftBackwards,0);
   analogWrite(motorLeftForward, 240);
   analogWrite(motorRightForward, 0);
@@ -132,14 +194,22 @@ void rotatePulses(int nrOfPulses)
   long movementBuffer = millis() + movementStuckBufferDelay;
   boolean isActive = true;
   getDistanceLeft();
-  turnLeft();  
-  wait(200);
+  turnLeft();
+  wait(250);
   while ((countLeft<nrOfPulses && countRight<nrOfPulses) && distanceLeft>=15 && isActive)
     {
-      if(countLeft == lastCountLeft && countRight == lastCountRight){ //wheel has not pulsed yet
-        if(millis() > movementBuffer){ //if not moved for duration
+      if(countLeft == lastCountLeft && countRight == lastCountRight)
+      { //wheel has not pulsed yet
+        if(millis() > movementBuffer && distanceLeft < 3)
+        { //if not moved for duration
           movementBuffer = millis() + movementStuckBufferDelay;
-          moveBackwardsRotate();
+          moveBackwardsRotateRight();
+          wait(400);
+        }
+        else if (millis() > movementBuffer && distanceLeft >= 3)
+        {
+          movementBuffer = millis() + movementStuckBufferDelay;
+          moveBackwardsRotateLeft();
           wait(400);
         }
       }
@@ -166,11 +236,11 @@ void moveForwardOnPulses(int nrOfPulses)
   moveForward();
   while ((countLeft<nrOfPulses && countRight<nrOfPulses) && isActive)
   {
-    if(countLeft == lastCountLeft && countRight == lastCountRight){ //wheel has not pulsed yet
+    if(countLeft == lastCountLeft || countRight == lastCountRight){ //wheel has not pulsed yet and was && before
         if(millis() > movementBuffer){ //if not moved for duration
           movementBuffer = millis() + movementStuckBufferDelay;
           moveBackwards();
-          wait(400);
+          wait(500);
         }
       }
       else{
@@ -254,6 +324,9 @@ void closeGripper()
 //===[SETUP ]============================
 
 void setup() {
+  strip.begin();
+  strip.show();
+  
   pinMode(motor_R1, INPUT_PULLUP);
   pinMode(motor_R2, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(motor_R1),CountA,CHANGE);
@@ -270,7 +343,8 @@ void setup() {
 //===[ LOOP ]============================
 
 void loop()
-{
+{   // first - green , second - red, third - blue
+  
   if(hasStarted){
    getDistanceLeft();
    getDistanceFront();
@@ -282,7 +356,7 @@ void loop()
    }
    else if(distanceLeft>15 && distanceFront>15)
     {
-      rotatePulses(36);
+      rotatePulses(31);
       stopRobot();
       wait(200);
       moveForwardOnPulses(25);

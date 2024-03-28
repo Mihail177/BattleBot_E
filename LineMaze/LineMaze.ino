@@ -32,6 +32,7 @@ int motorSpeedForward = 255;
 int motorSpeedTurn = 255;
 
 int lineCount = 0;
+int executionStage = 0;
 bool shouldPerformLineCountingAndGrabbing = true;
 
 volatile long encoderCountLeft = 0;
@@ -41,6 +42,11 @@ const unsigned long speedAdjustInterval = 5000;
 
 bool lastLineDetectedOnLeft = true;
 bool lineDetected = false; 
+
+unsigned long actionStartTime = 0;
+bool isActionInProgress = false; 
+enum class RobotState { CHECKING, DROP_OBJECT, MOVE_BACK, STOP }; 
+RobotState currentState = RobotState::CHECKING;
 
 void ISR_encoderCountLeft() {
   encoderCountLeft++;
@@ -63,6 +69,11 @@ void performLineCountingAndGrabbing();
 void measureAndAdjustSpeed();
 void updateGreenLight();
 void turnLeft90Degrees();
+void updateLineDetectionSide();
+void LineSeek();
+bool blackLineDetectedFor2Seconds();
+float getDistance();
+void performObstacleAvoidance();
 
 void setup() {
   #if defined(__AVR_ATtiny85__) && (F_CPU == 16000000)
@@ -95,7 +106,8 @@ void setup() {
 }
 
 void loop() {
-  if (shouldPerformLineCountingAndGrabbing) {
+  if (executionStage == 0) {
+     if (shouldPerformLineCountingAndGrabbing) {
     performLineCountingAndGrabbing();
   }
   else {
@@ -103,21 +115,59 @@ void loop() {
     updateLineDetectionSide();
     LineSeek();
     adjustTurn();
+    blackLineDetectedFor2Seconds();
     float distance = getDistance();
     if (distance < 20) {
       stopMotors();
       delay(100);
       performObstacleAvoidance();
-    } 
+    }
   }
+  }
+   else if (executionStage == 1) {
+    releaseObject(); 
+    moveBackward();
+    executionStage = 2;
+    
+  }
+  else if (executionStage == 2){
+    executionStage = 2;
+    stopMotors();
+    }
 }
 
+bool blackLineDetectedFor2Seconds() {
+    static unsigned long startTime = 0; 
+    const long detectionPeriod = 700; 
+    bool allBlackDetected = true;
+
+    for (int i = 0; i < 8; i++) {
+        if (analogRead(lineSensors[i]) < calculateLineThreshold()) {
+            allBlackDetected = false;
+            break;
+        }
+    }
+
+    if (allBlackDetected) {
+        if (startTime == 0) {
+            startTime = millis();
+        } else if (millis() - startTime >= detectionPeriod) {
+            startTime = 0; 
+            executionStage = 1;
+            return true; 
+        }
+    } else {
+        startTime = 0;
+    }
+
+    return false;
+}
 
 void performObstacleAvoidance() {
   turnRight();
   delay(400);
   moveForward();
-  delay(500);
+  delay(700);
   turnLeft();
   delay(600);
   bool lineFound = false;
@@ -130,10 +180,8 @@ void performObstacleAvoidance() {
           break;
       }
     }
-    delay(10); 
   } 
 }
-
 
 int calculateLineThreshold() {
   static int calculatedLineThreshold = -1;
@@ -145,15 +193,9 @@ int calculateLineThreshold() {
   for (int i = 0; i < 8; i++) {
     int sensorValue = analogRead(lineSensors[i]);
     highestValue = max(highestValue, sensorValue);
-    Serial.print("Sensor ");
-    Serial.print(i);
-    Serial.print(": ");
-    Serial.println(sensorValue);
   }
   
   calculatedLineThreshold = highestValue + 100;
-  Serial.print("Calculated lineThreshold: ");
-  Serial.println(calculatedLineThreshold);
   return calculatedLineThreshold;
 }
 
@@ -162,47 +204,17 @@ void grabObject() {
   delay(1000);
 }
 
-void updateGreenLight() {
-  if (greenLightOn && millis() - greenLightStartTime >= 1000) {
-    pixels.setPixelColor(0, pixels.Color(0, 0, 0));
-    pixels.setPixelColor(3, pixels.Color(0, 0, 0));
-    pixels.show();
-    greenLightOn = false; // Indicate that the green light is now off
-  }
-}
-
 void releaseObject() {
   controlGripper(pulseWidthPartialOpen);
   delay(1000);
 }
 
-void dropObjectIfAllSensorsDetectBlack() {
-  unsigned long startTime = millis(); 
-  bool allBlackDetected = false;
-
-  while (millis() - startTime < 2000) { 
-    allBlackDetected = true; 
-    for (int i = 0; i < 8; i++) {
-      if (analogRead(lineSensors[i]) < calculateLineThreshold()) {
-        allBlackDetected = false; 
-        break;
-      }
-    }
-
-    if (!allBlackDetected) {
-      startTime = millis();
-    }
-    delay(10);
-  }
-
-  if (allBlackDetected) {
-    releaseObject();
-    delay(500); 
-    stopMotors(); 
-
-    while (true) {
-      delay(1000); 
-    }
+void updateGreenLight() {
+  if (greenLightOn && millis() - greenLightStartTime >= 1000) {
+    pixels.setPixelColor(0, pixels.Color(0, 0, 0));
+    pixels.setPixelColor(3, pixels.Color(0, 0, 0));
+    pixels.show();
+    greenLightOn = false;
   }
 }
 
@@ -213,9 +225,9 @@ void measureAndAdjustSpeed() {
     encoderCountRight = 0;
   
     if (speedLeft > speedRight) {
-      motorSpeedForward -= (speedLeft - speedRight); // Slow down left motor
+      motorSpeedForward -= (speedLeft - speedRight); 
     } else if (speedRight > speedLeft) {
-      motorSpeedForward -= (speedRight - speedLeft); // Slow down right motor
+      motorSpeedForward -= (speedRight - speedLeft); 
     }
     motorSpeedForward = constrain(motorSpeedForward, 200, 255);
 }
@@ -242,8 +254,6 @@ void performLineCountingAndGrabbing() {
     int lineDetected = checkLines();
     if (lineDetected) {
       lineCount++;
-      Serial.print("Line Count: ");
-      Serial.println(lineCount);
       delay(200); 
     }
   }
@@ -321,13 +331,21 @@ void turnRight() {
   digitalWrite(motorB2, LOW);
 }
 
+void moveBackward() {
+    digitalWrite(motorA1, LOW);
+    digitalWrite(motorA2, HIGH);
+    digitalWrite(motorB1, LOW);
+    digitalWrite(motorB2, HIGH);
+}
+
 void adjustTurn() {
     int sensorValue0 = analogRead(lineSensors[0]); // Green, middle one
     int sensorValue1 = analogRead(lineSensors[1]); // A1, left of middle
     int sensorValue2 = analogRead(lineSensors[2]); // Blue, middle one
     int sensorValue3 = analogRead(lineSensors[3]); // A3, right of middle
 
-   if (sensorValue0 > calculateLineThreshold() || sensorValue1 > calculateLineThreshold()|| sensorValue2 > calculateLineThreshold() || sensorValue3 > calculateLineThreshold()){
+   if (sensorValue0 > calculateLineThreshold() || sensorValue1 > calculateLineThreshold()
+       || sensorValue2 > calculateLineThreshold() || sensorValue3 > calculateLineThreshold()){
         moveForward();
     } else {
       if (sensorValue1 < calculateLineThreshold()) {
@@ -374,8 +392,6 @@ void LineSeek() {
     }
 }
 
-
-
 bool areAllSensorsBelowThreshold() {
     for (int i = 0; i < 8; i++) {
         if (analogRead(lineSensors[i]) > calculateLineThreshold()) {
@@ -386,8 +402,7 @@ bool areAllSensorsBelowThreshold() {
 }
 
 
-
- void turnLeft90Degrees() {
+void turnLeft90Degrees() {
   int sensorValue0, sensorValue1, sensorValue2, sensorValue3, sensorValueA7, sensorValueA5;
   digitalWrite(motorA1, LOW);
   analogWrite(motorA2, motorSpeedTurn); 

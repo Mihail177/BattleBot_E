@@ -87,36 +87,27 @@ void setup() {
 void loop() {
   getSensorsValues();
   calculateLineThreshold();
-  if (shouldPerformLineCountingAndGrabbing) { //this part of code makes sure to run this only ones and then ignore
+  
+  // Check if line counting and grabbing should be performed
+  if (shouldPerformLineCountingAndGrabbing) {
     performLineCountingAndGrabbing();
-  }
-  else 
-  {
-      if( sensors[0] && sensors[1] && sensors[2] && sensors[3] && sensors[4]&& sensors[5] && sensors[6] && sensors[7]){
-      Serial.print("YES");
-      moveForward();
-      if(sensors[0] && sensors[1] && sensors[2] && sensors[3] && sensors[4]&& sensors[5] && sensors[6] && sensors[7]){
-          moveForward();
-        // Step back a little bit   
-          analogWrite(leftP, 100);
-          analogWrite(leftN, 255);
-          analogWrite(rightP, 100);
-          analogWrite(rightN, 255);
-          delay(500); // Adjust the delay based on how much you want the robot to step back
-        
-          // Drop the object (open the gripper)
-          releaseObject();
-          delay(1000); // Delay to showcase the drop action
+  } else {
+    // Check if all sensors detect black (indicating the presence of the black box)
+    if (sensors[0] && sensors[1] && sensors[2] && sensors[3] && sensors[4] && sensors[5] && sensors[6] && sensors[7]) {
+       moveForward();
+       if (sensors[0] && sensors[1] && sensors[2] && sensors[3] && sensors[4] && sensors[5] && sensors[6] && sensors[7]) {
          
-          // Stop the robot
-          stop();
-    }
-   }
-    else {
-      solveMaze(); 
-    }
-  }
+      // Call the function to drop the object and stop
+      dropObjectAndStop();
+       } 
+       else {
+      // If the black box is not detected, continue solving the maze
+      solveMaze();
+    } 
+   }   
+ }
 }
+
 
 
 //Movements
@@ -404,33 +395,24 @@ void controlGripper(int pulseWidth) { //Function to control gripper without Serv
 
 //Function to drop the object and finish the maze
 
-//void dropObjectAndStop() {
-//  
-//  getSensorsValues();
-  // Check if all line sensors detect black
-  
-//    if (!sensors[0] || !sensors[1] || !sensors[2] || !sensors[3] || !sensors[4] || !sensors[5] || !sensors[6] || !sensors[7]) {
-//      break; // No need to continue checking if one sensor detects white
-//    } else if (sensors[0] && sensors[1] && sensors[2] && sensors[3] && sensors[4]&& sensors[5] && sensors[6] && sensors[7]) { // If all sensors detect black
-//    
-//      moveForwardBeforeTurn();
-//      
-//      if(sensors[0] && sensors[1] && sensors[2] && sensors[3] && sensors[4]&& sensors[5] && sensors[6] && sensors[7]){
-//        // Step back a little bit
-//        
-//        analogWrite(leftP, 100);
-//        analogWrite(leftN, 255);
-//        analogWrite(rightP, 100);
-//        analogWrite(rightN, 255);
-//        delay(500); // Adjust the delay based on how much you want the robot to step back
-//      
-//        // Drop the object (open the gripper)
-//        releaseObject();
-//        delay(1000); // Delay to showcase the drop action
-//       
-//        // Stop the robot
-//        stop();
-//      } else {
-//        break;
-//      }
-//  }
+void dropObjectAndStop() {
+    // Move forward to check if the box is still black
+    moveForward();
+    
+    // Check if all sensors still detect black
+    if (sensors[0] && sensors[1] && sensors[2] && sensors[3] && sensors[4] && sensors[5] && sensors[6] && sensors[7]) {
+      // Step back a little bit
+      analogWrite(leftP, 100);
+      analogWrite(leftN, 255);
+      analogWrite(rightP, 100);
+      analogWrite(rightN, 255);
+      delay(500); // Adjust the delay based on how much you want the robot to step back
+      
+      // Drop the object (open the gripper)
+      releaseObject();
+      delay(1000); // Delay to showcase the drop action
+      
+      // Stop the robot
+      stop();
+    }
+  }

@@ -1,22 +1,24 @@
+#include <Arduino.h>
+
 const int motorA1 = 10;
 const int motorA2 = 11;
 const int motorB1 = 6;
 const int motorB2 = 5;
 
-const int servoPin = 9;
+const int servoPin = 9; // gripper
 
 
-const int pulseWidthOpen = 1000;
-const int pulseWidthPartialOpen = 1500;
-const int period = 20000;
+const int pulseWidthOpen = 1000; //gripper open
+const int pulseWidthPartialOpen = 1500; //gripper closed
+const int period = 20000; // 
 
-const int lineSensors[8] = {A0, A1, A2, A3, A4, A5, A6, A7};
+const int lineSensors[8] = {A0, A1, A2, A3, A4, A5, A6, A7}; // 8-pin sensor 
 
-int motorSpeedForward = 255;
+int motorSpeedForward = 255; 
 int motorSpeedTurn = 255;
 
-int lineCount = 0;
-bool shouldPerformLineCountingAndGrabbing = true;
+int lineCount = 0;  //
+bool shouldPerformLineCountingAndGrabbing = true;  
 
 
 volatile long encoderCountLeft = 0;
@@ -65,22 +67,14 @@ void loop() {
       lastSpeedAdjustTime = millis();
     }
 
-    int sensorValue0 = analogRead(lineSensors[0]); // Green, middle one
-    int sensorValue1 = analogRead(lineSensors[1]); // A1, left of middle
-    int sensorValue2 = analogRead(lineSensors[2]); // Blue, middle one
-    int sensorValue3 = analogRead(lineSensors[3]); // A3, right of middle
-    int sensorValueA7 = analogRead(lineSensors[6]); // A7, leftmost brown (not used for turn logic here)
-    int sensorValueA5 = analogRead(lineSensors[5]); // A5, rightmost
+//    int sensorValue0 = analogRead(lineSensors[0]); // Green, middle one
+//    int sensorValue1 = analogRead(lineSensors[1]); // A1, left of middle
+//    int sensorValue2 = analogRead(lineSensors[2]); // Blue, middle one
+//    int sensorValue3 = analogRead(lineSensors[3]); // A3, right of middle
+//    int sensorValueA7 = analogRead(lineSensors[6]); // A7, leftmost brown (not used for turn logic here)
+//    int sensorValueA5 = analogRead(lineSensors[5]); // A5, rightmost
+    adjustTurn();
 
-    if ((sensorValue0 > calculateLineThreshold() || sensorValue1 > calculateLineThreshold() || sensorValue2 > calculateLineThreshold() || sensorValue3 > calculateLineThreshold())) {
-    moveForward();
-    } else {
-      if (sensorValue1 < sensorValue3) {
-          turnRight();
-      } else {
-        turnLeft();
-      }
-    }
   }
 }
 
@@ -115,6 +109,27 @@ void releaseObject() {
   controlGripper(pulseWidthPartialOpen);
   delay(1000);
 }
+
+void adjustTurn() {
+    int sensorValue0 = analogRead(lineSensors[0]);
+    int sensorValue1 = analogRead(lineSensors[1]);
+    int sensorValue2 = analogRead(lineSensors[2]);
+    int sensorValue3 = analogRead(lineSensors[3]);
+    int sensorValue5 = analogRead(lineSensors[5]); // LineSensor 5 (A5)
+    int sensorValue6 = analogRead(lineSensors[6]); // LineSensor A6
+    int lineThreshold = calculateLineThreshold();
+
+    if ((sensorValue0 > calculateLineThreshold() || sensorValue1 > calculateLineThreshold() || sensorValue2 > calculateLineThreshold() || sensorValue3 > calculateLineThreshold())) {
+    moveForward();
+    } else {
+      if (sensorValue1 < sensorValue3) {
+          turnRight();
+      } else {
+        turnLeft();
+      }
+    }
+}
+
 
 void dropObjectIfAllSensorsDetectBlack() {
   unsigned long startTime = millis(); // Start the timer

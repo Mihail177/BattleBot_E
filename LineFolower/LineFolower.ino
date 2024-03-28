@@ -1,26 +1,47 @@
-// Motor control pins
+//code added for Neopixels.
+#include <Adafruit_NeoPixel.h>
+#ifdef __AVR__
+#include <avr/power.h>
+#endif
+
+#define PIN 13 
+#define NUMPIXELS 4 
+
+Adafruit_NeoPixel pixels(NUMPIXELS, PIN, NEO_RGB + NEO_KHZ800);
+
+unsigned long greenLightStartTime = 0; // Stores the time the green light was turned on
+bool greenLightOn = false;
+
+const int trigPin = 8;
+const int echoPin = 7;
+
 const int motorA1 = 10;
 const int motorA2 = 11;
 const int motorB1 = 6;
 const int motorB2 = 5;
 
-// Adjust these PWM values to control motor speed (0-255)
-int motorSpeedForward = 200;
-int motorSpeedTurn = 200;
+const int servoPin = 9;
 
-// Line sensor pins
+const int pulseWidthOpen = 1000;
+const int pulseWidthPartialOpen = 1500;
+const int period = 20000;
+
 const int lineSensors[8] = {A0, A1, A2, A3, A4, A5, A6, A7};
 
-// Sensor threshold
-const int sensorThreshold = 700;
+int motorSpeedForward = 255;
+int motorSpeedTurn = 255;
 
-// Variables for speed measurement and adjustment
+int lineCount = 0;
+bool shouldPerformLineCountingAndGrabbing = true;
+
 volatile long encoderCountLeft = 0;
 volatile long encoderCountRight = 0;
 unsigned long lastSpeedAdjustTime = 0;
-const unsigned long speedAdjustInterval = 5000; // Adjust every 5 seconds
+const unsigned long speedAdjustInterval = 5000;
 
-// Encoder interrupt service routines (ISR) for left and right wheels
+bool lastLineDetectedOnLeft = true;
+bool lineDetected = false; 
+
 void ISR_encoderCountLeft() {
   encoderCountLeft++;
 }
@@ -29,89 +50,237 @@ void ISR_encoderCountRight() {
   encoderCountRight++;
 }
 
+void moveForward();
+void turnLeft();
+void turnRight();
+void adjustTurn();
+void stopMotors();
+void grabObject();
+void releaseObject();
+void controlGripper(int pulseWidth);
+int calculateLineThreshold();
+void performLineCountingAndGrabbing();
+void measureAndAdjustSpeed();
+void updateGreenLight();
+void turnLeft90Degrees();
+
 void setup() {
-  // Initialize motor control pins as output
+  #if defined(__AVR_ATtiny85__) && (F_CPU == 16000000)
+  clock_prescale_set(clock_div_1);
+  #endif
+
+  pixels.begin();
+  
   pinMode(motorA1, OUTPUT);
   pinMode(motorA2, OUTPUT);
   pinMode(motorB1, OUTPUT);
   pinMode(motorB2, OUTPUT);
 
-  // Initialize encoder input pins and attach interrupts
+  pinMode(servoPin, OUTPUT);
+
   attachInterrupt(digitalPinToInterrupt(3), ISR_encoderCountLeft, RISING);
   attachInterrupt(digitalPinToInterrupt(2), ISR_encoderCountRight, RISING);
 
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+
+  for (int i = 0; i < 8; i++) {
+    pinMode(lineSensors[i], INPUT);
+  }
+
   Serial.begin(9600);
+  while (!Serial); 
+  releaseObject();
+  calculateLineThreshold();
 }
 
 void loop() {
-  // Measure speed and adjust if necessary
-  if (millis() - lastSpeedAdjustTime > speedAdjustInterval) {
+  if (shouldPerformLineCountingAndGrabbing) {
+    performLineCountingAndGrabbing();
+  }
+  else {
     measureAndAdjustSpeed();
-    lastSpeedAdjustTime = millis();
+    updateLineDetectionSide();
+    LineSeek();
+    adjustTurn();
+    float distance = getDistance();
+    if (distance < 20) {
+      stopMotors();
+      delay(100);
+      performObstacleAvoidance();
+    } 
+  }
+}
+
+
+void performObstacleAvoidance() {
+  turnRight();
+  delay(400);
+  moveForward();
+  delay(500);
+  turnLeft();
+  delay(600);
+  bool lineFound = false;
+  while (!lineFound) {
+    moveForward();
+    for (int i = 0; i <= 3; i++) {
+       if (analogRead(lineSensors[i]) > calculateLineThreshold()) {
+          lineFound = true;
+          stopMotors();
+          break;
+      }
+    }
+    delay(10); 
+  } 
+}
+
+
+int calculateLineThreshold() {
+  static int calculatedLineThreshold = -1;
+  if (calculatedLineThreshold != -1) {
+    return calculatedLineThreshold;
   }
 
-  // Read values from the specified line-following sensors
-  int sensorValue0 = analogRead(lineSensors[0]);
-  int sensorValue1 = analogRead(lineSensors[1]);
-  // Additional sensor readings can be added here
-
-  // Debugging: Print sensor values
-  Serial.print("Sensor 0: ");
-  Serial.print(sensorValue0);
-  Serial.print("\tSensor 1: ");
-  Serial.println(sensorValue1);
-
-  // Determine action based on sensor values
-  if (sensorValue0 > sensorThreshold || sensorValue1 > sensorThreshold) {
-    // If any of the specified sensors detect the line, move forward
-    moveForward();
-  } else {
-    // If none of the sensors detect the line, decide to turn
-    if (sensorValue0 < sensorValue1) {
-      turnLeft();
-    } else {
-      turnRight();
-    }
+  int highestValue = 0;
+  for (int i = 0; i < 8; i++) {
+    int sensorValue = analogRead(lineSensors[i]);
+    highestValue = max(highestValue, sensorValue);
+    Serial.print("Sensor ");
+    Serial.print(i);
+    Serial.print(": ");
+    Serial.println(sensorValue);
   }
   
-  delay(100); // Adjust delay as needed
+  calculatedLineThreshold = highestValue + 100;
+  Serial.print("Calculated lineThreshold: ");
+  Serial.println(calculatedLineThreshold);
+  return calculatedLineThreshold;
+}
+
+void grabObject() {
+  controlGripper(pulseWidthOpen);
+  delay(1000);
+}
+
+void updateGreenLight() {
+  if (greenLightOn && millis() - greenLightStartTime >= 1000) {
+    pixels.setPixelColor(0, pixels.Color(0, 0, 0));
+    pixels.setPixelColor(3, pixels.Color(0, 0, 0));
+    pixels.show();
+    greenLightOn = false; // Indicate that the green light is now off
+  }
+}
+
+void releaseObject() {
+  controlGripper(pulseWidthPartialOpen);
+  delay(1000);
+}
+
+void dropObjectIfAllSensorsDetectBlack() {
+  unsigned long startTime = millis(); 
+  bool allBlackDetected = false;
+
+  while (millis() - startTime < 2000) { 
+    allBlackDetected = true; 
+    for (int i = 0; i < 8; i++) {
+      if (analogRead(lineSensors[i]) < calculateLineThreshold()) {
+        allBlackDetected = false; 
+        break;
+      }
+    }
+
+    if (!allBlackDetected) {
+      startTime = millis();
+    }
+    delay(10);
+  }
+
+  if (allBlackDetected) {
+    releaseObject();
+    delay(500); 
+    stopMotors(); 
+
+    while (true) {
+      delay(1000); 
+    }
+  }
 }
 
 void measureAndAdjustSpeed() {
-  long speedLeft = encoderCountLeft / speedAdjustInterval;
-  long speedRight = encoderCountRight / speedAdjustInterval;
-  encoderCountLeft = 0; // Reset for next measurement
-  encoderCountRight = 0;
+    long speedLeft = encoderCountLeft / speedAdjustInterval;
+    long speedRight = encoderCountRight / speedAdjustInterval;
+    encoderCountLeft = 0; // Reset for next measurement
+    encoderCountRight = 0;
+  
+    if (speedLeft > speedRight) {
+      motorSpeedForward -= (speedLeft - speedRight); // Slow down left motor
+    } else if (speedRight > speedLeft) {
+      motorSpeedForward -= (speedRight - speedLeft); // Slow down right motor
+    }
+    motorSpeedForward = constrain(motorSpeedForward, 200, 255);
+}
 
-  // Adjust motorSpeedForward based on the difference in speed
-  if (speedLeft > speedRight) {
-    motorSpeedForward -= (speedLeft - speedRight); // Slow down left motor
-  } else if (speedRight > speedLeft) {
-    motorSpeedForward -= (speedRight - speedLeft); // Slow down right motor
+float getDistance() {
+    digitalWrite(trigPin, LOW);
+    delayMicroseconds(2);
+
+    digitalWrite(trigPin, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(trigPin, LOW);
+
+    unsigned long duration = pulseIn(echoPin, HIGH);
+
+    float distanceCm = duration * 0.034 / 2;
+
+    return distanceCm;
+}
+
+
+void performLineCountingAndGrabbing() {
+  if (lineCount < 4) {
+    moveForward();
+    int lineDetected = checkLines();
+    if (lineDetected) {
+      lineCount++;
+      Serial.print("Line Count: ");
+      Serial.println(lineCount);
+      delay(200); 
+    }
   }
 
-  // Ensure motorSpeedForward remains within valid PWM range
-  motorSpeedForward = constrain(motorSpeedForward, 0, 255);
+  if (lineCount == 4 ) {
+    stopMotors();
+    grabObject();
+    delay(500); 
+    shouldPerformLineCountingAndGrabbing = false;
+    lineCount++; 
+    turnLeft90Degrees(); 
+  }
+}
+
+int checkLines() {
+  for (int i = 0; i < 8; i++) {
+    if (analogRead(lineSensors[i]) > calculateLineThreshold()) {
+      return 1; // Line detected
+    }
+  }
+  return 0; 
+}
+
+
+void controlGripper(int pulseWidth) {
+  for (int i = 0; i < 50; i++) { 
+    digitalWrite(servoPin, HIGH);
+    delayMicroseconds(pulseWidth);
+    digitalWrite(servoPin, LOW);
+    delayMicroseconds(period - pulseWidth);
+  }
 }
 
 void moveForward() {
-  analogWrite(motorA1, motorSpeedForward);
+  digitalWrite(motorA1, motorSpeedForward);
   digitalWrite(motorA2, LOW);
-  analogWrite(motorB1, motorSpeedForward);
-  digitalWrite(motorB2, LOW);
-}
-
-void turnLeft() {
-  digitalWrite(motorA1, LOW); // Optionally reduce speed instead of stopping for a smoother turn
-  digitalWrite(motorA2, LOW);
-  analogWrite(motorB1, motorSpeedTurn);
-  digitalWrite(motorB2, LOW);
-}
-
-void turnRight() {
-  analogWrite(motorA1, motorSpeedTurn);
-  digitalWrite(motorA2, LOW);
-  digitalWrite(motorB1, LOW); // Optionally reduce speed instead of stopping for a smoother turn
+  digitalWrite(motorB1, motorSpeedForward);
   digitalWrite(motorB2, LOW);
 }
 
@@ -120,4 +289,121 @@ void stopMotors() {
   digitalWrite(motorA2, LOW);
   digitalWrite(motorB1, LOW);
   digitalWrite(motorB2, LOW);
+}
+
+void turnLeft() {
+ if (!greenLightOn) {
+    pixels.setPixelColor(0, pixels.Color(0, 50, 0));
+    pixels.setPixelColor(3, pixels.Color(0, 50, 0));
+    pixels.show();
+    greenLightStartTime = millis(); 
+    greenLightOn = true; 
+  }
+  Serial.print("Turned left ");
+  analogWrite(motorA1, motorSpeedTurn);
+  digitalWrite(motorA2, LOW);
+  digitalWrite(motorB1, LOW); 
+  digitalWrite(motorB2, LOW);
+}
+
+void turnRight() {
+  if (!greenLightOn) {
+    pixels.setPixelColor(1, pixels.Color(0, 50, 0));
+    pixels.setPixelColor(2, pixels.Color(0, 50, 0));
+    pixels.show();
+    greenLightStartTime = millis();
+    greenLightOn = true; 
+  }
+  Serial.print("Turned right ");
+  digitalWrite(motorA1, LOW); 
+  digitalWrite(motorA2, LOW);
+  analogWrite(motorB1, motorSpeedTurn);
+  digitalWrite(motorB2, LOW);
+}
+
+void adjustTurn() {
+    int sensorValue0 = analogRead(lineSensors[0]); // Green, middle one
+    int sensorValue1 = analogRead(lineSensors[1]); // A1, left of middle
+    int sensorValue2 = analogRead(lineSensors[2]); // Blue, middle one
+    int sensorValue3 = analogRead(lineSensors[3]); // A3, right of middle
+
+   if (sensorValue0 > calculateLineThreshold() || sensorValue1 > calculateLineThreshold()|| sensorValue2 > calculateLineThreshold() || sensorValue3 > calculateLineThreshold()){
+        moveForward();
+    } else {
+      if (sensorValue1 < calculateLineThreshold()) {
+          turnRight();
+      }
+      else if (sensorValue1 > calculateLineThreshold()) {
+          turnLeft();
+      }
+  }
+}
+
+void updateLineDetectionSide() {
+    int sensorValue4 = analogRead(lineSensors[4]);
+    int sensorValue5 = analogRead(lineSensors[5]);
+    int sensorValue6 = analogRead(lineSensors[6]);
+    int sensorValue7 = analogRead(lineSensors[7]);
+
+    if (sensorValue6 > calculateLineThreshold() || sensorValue7 > calculateLineThreshold()) {
+        lastLineDetectedOnLeft = true;
+    } else if (sensorValue4 > calculateLineThreshold() || sensorValue5 > calculateLineThreshold()) {
+        lastLineDetectedOnLeft = false;
+    }
+}
+
+void LineSeek() {
+    if (areAllSensorsBelowThreshold()) {
+        do {
+            if (lastLineDetectedOnLeft) {
+                turnRight();
+            } else {
+                Serial.println("Turning left due to previous right detection...");
+                turnLeft();
+            }
+
+            lineDetected = analogRead(lineSensors[0]) > calculateLineThreshold() ||
+                           analogRead(lineSensors[1]) > calculateLineThreshold() ||
+                           analogRead(lineSensors[2]) > calculateLineThreshold() ||
+                           analogRead(lineSensors[3]) > calculateLineThreshold();
+            
+            delay(10); 
+        } while (!lineDetected); 
+
+        stopMotors(); 
+    }
+}
+
+
+
+bool areAllSensorsBelowThreshold() {
+    for (int i = 0; i < 8; i++) {
+        if (analogRead(lineSensors[i]) > calculateLineThreshold()) {
+            return false; 
+        }
+    }
+    return true;
+}
+
+
+
+ void turnLeft90Degrees() {
+  int sensorValue0, sensorValue1, sensorValue2, sensorValue3, sensorValueA7, sensorValueA5;
+  digitalWrite(motorA1, LOW);
+  analogWrite(motorA2, motorSpeedTurn); 
+  analogWrite(motorB1, motorSpeedTurn);
+  digitalWrite(motorB2, LOW);
+
+  do {
+    sensorValue0 = analogRead(lineSensors[0]); // Middle sensor 1
+    sensorValue1 = analogRead(lineSensors[1]); // Middle sensor 2 (left of middle)
+    sensorValue2 = analogRead(lineSensors[2]); // Middle sensor 3 (right of middle)
+    sensorValue3 = analogRead(lineSensors[3]); // Middle sensor 4
+    sensorValueA7 = analogRead(lineSensors[6]); // Leftmost sensor
+    sensorValueA5 = analogRead(lineSensors[5]); // Rightmost sensor
+
+  } while (!((sensorValue0 > calculateLineThreshold() || sensorValue1 > calculateLineThreshold() || sensorValue2 > calculateLineThreshold() || sensorValue3 > calculateLineThreshold()) &&
+             sensorValueA7 < calculateLineThreshold() && sensorValueA5 < calculateLineThreshold()));
+
+  stopMotors();
 }

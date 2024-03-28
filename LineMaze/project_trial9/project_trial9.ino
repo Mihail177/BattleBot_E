@@ -85,12 +85,36 @@ void setup() {
 
 
 void loop() {
+  getSensorsValues();
   calculateLineThreshold();
   if (shouldPerformLineCountingAndGrabbing) { //this part of code makes sure to run this only ones and then ignore
     performLineCountingAndGrabbing();
   }
-  else{
-  solveMaze(); 
+  else 
+  {
+      if( sensors[0] && sensors[1] && sensors[2] && sensors[3] && sensors[4]&& sensors[5] && sensors[6] && sensors[7]){
+      Serial.print("YES");
+      moveForward();
+      if(sensors[0] && sensors[1] && sensors[2] && sensors[3] && sensors[4]&& sensors[5] && sensors[6] && sensors[7]){
+          moveForward();
+        // Step back a little bit   
+          analogWrite(leftP, 100);
+          analogWrite(leftN, 255);
+          analogWrite(rightP, 100);
+          analogWrite(rightN, 255);
+          delay(500); // Adjust the delay based on how much you want the robot to step back
+        
+          // Drop the object (open the gripper)
+          releaseObject();
+          delay(1000); // Delay to showcase the drop action
+         
+          // Stop the robot
+          stop();
+    }
+   }
+    else {
+      solveMaze(); 
+    }
   }
 }
 
@@ -199,6 +223,49 @@ void getSensorsValues(){
       }
     }
   }
+
+
+//Functions for the LED
+void colorTurnLeft()
+{
+  strip.setPixelColor(LEFT_BACK_LED, strip.Color(0, 0, 255)); // Blue for left side
+  strip.setPixelColor(LEFT_FRONT_LED, strip.Color(0, 0, 255)); // Blue for left side
+
+  strip.setPixelColor(RIGHT_BACK_LED, strip.Color(0, 255, 0)); // Green for right side
+  strip.setPixelColor(RIGHT_FRONT_LED, strip.Color(0, 255, 0)); // Green for right side
+
+  strip.show();
+}
+
+void colorTurnRight()
+{
+  strip.setPixelColor(LEFT_BACK_LED, strip.Color(0, 255, 0)); // Green for left side
+  strip.setPixelColor(LEFT_FRONT_LED, strip.Color(0, 255, 0)); // Green for left side
+
+  strip.setPixelColor(RIGHT_BACK_LED, strip.Color(0, 0, 255)); // Blue for right side
+  strip.setPixelColor(RIGHT_FRONT_LED, strip.Color(0, 0, 255)); // Blue for right side
+
+  strip.show();
+} 
+
+//All red
+void colorStop()
+{
+   for(int i = 0; i < strip.numPixels(); i++) {
+    strip.setPixelColor(i, strip.Color(0,255,0));
+  }
+  strip.show();
+}
+
+//All green
+void colorForward()
+{
+   for(int i = 0; i < strip.numPixels(); i++) {
+   strip.setPixelColor(i, strip.Color(255,0,0));
+  }
+  strip.show();
+}
+
   
 //Function to solve the maze 
 
@@ -270,7 +337,7 @@ void solveMaze(){
     }
    }
  }
-//Function for the gripper
+//Function beginning and grab the object
 
 void grabObject() { //gripper drop an object
   controlGripper(pulseWidthOpen);
@@ -335,43 +402,35 @@ void controlGripper(int pulseWidth) { //Function to control gripper without Serv
   }
 }
 
-//Functions for the LED
-void colorTurnLeft()
-{
-  strip.setPixelColor(LEFT_BACK_LED, strip.Color(0, 0, 255)); // Blue for left side
-  strip.setPixelColor(LEFT_FRONT_LED, strip.Color(0, 0, 255)); // Blue for left side
+//Function to drop the object and finish the maze
 
-  strip.setPixelColor(RIGHT_BACK_LED, strip.Color(0, 255, 0)); // Green for right side
-  strip.setPixelColor(RIGHT_FRONT_LED, strip.Color(0, 255, 0)); // Green for right side
-
-  strip.show();
-}
-
-void colorTurnRight()
-{
-  strip.setPixelColor(LEFT_BACK_LED, strip.Color(0, 255, 0)); // Green for left side
-  strip.setPixelColor(LEFT_FRONT_LED, strip.Color(0, 255, 0)); // Green for left side
-
-  strip.setPixelColor(RIGHT_BACK_LED, strip.Color(0, 0, 255)); // Blue for right side
-  strip.setPixelColor(RIGHT_FRONT_LED, strip.Color(0, 0, 255)); // Blue for right side
-
-  strip.show();
-} 
-
-//All red
-void colorStop()
-{
-   for(int i = 0; i < strip.numPixels(); i++) {
-    strip.setPixelColor(i, strip.Color(0,255,0));
-  }
-  strip.show();
-}
-
-//All green
-void colorForward()
-{
-   for(int i = 0; i < strip.numPixels(); i++) {
-   strip.setPixelColor(i, strip.Color(255,0,0));
-  }
-  strip.show();
-}
+//void dropObjectAndStop() {
+//  
+//  getSensorsValues();
+  // Check if all line sensors detect black
+  
+//    if (!sensors[0] || !sensors[1] || !sensors[2] || !sensors[3] || !sensors[4] || !sensors[5] || !sensors[6] || !sensors[7]) {
+//      break; // No need to continue checking if one sensor detects white
+//    } else if (sensors[0] && sensors[1] && sensors[2] && sensors[3] && sensors[4]&& sensors[5] && sensors[6] && sensors[7]) { // If all sensors detect black
+//    
+//      moveForwardBeforeTurn();
+//      
+//      if(sensors[0] && sensors[1] && sensors[2] && sensors[3] && sensors[4]&& sensors[5] && sensors[6] && sensors[7]){
+//        // Step back a little bit
+//        
+//        analogWrite(leftP, 100);
+//        analogWrite(leftN, 255);
+//        analogWrite(rightP, 100);
+//        analogWrite(rightN, 255);
+//        delay(500); // Adjust the delay based on how much you want the robot to step back
+//      
+//        // Drop the object (open the gripper)
+//        releaseObject();
+//        delay(1000); // Delay to showcase the drop action
+//       
+//        // Stop the robot
+//        stop();
+//      } else {
+//        break;
+//      }
+//  }

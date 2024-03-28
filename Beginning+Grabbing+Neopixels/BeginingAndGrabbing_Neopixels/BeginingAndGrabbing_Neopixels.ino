@@ -1,23 +1,19 @@
 //code added for Neopixels.
 #include <Adafruit_NeoPixel.h>
 #ifdef __AVR__
- #include <avr/power.h> // Required for 16 MHz Adafruit Trinket
+#include <avr/power.h>
 #endif
 
-// Which pin on the Arduino is connected to the NeoPixels?
-#define PIN        13 // On Trinket or Gemma, suggest changing this to 1
+#define PIN 13 
+#define NUMPIXELS 4 
 
-// How many NeoPixels are attached to the Arduino?
-#define NUMPIXELS 4 // Popular NeoPixel ring size
-
-// When setting up the NeoPixel library, we tell it how many pixels,
-// and which pin to use to send signals. Note that for older NeoPixel
-// strips you might need to change the third parameter -- see the
-// strandtest example for more information on possible values.
 Adafruit_NeoPixel pixels(NUMPIXELS, PIN, NEO_RGB + NEO_KHZ800);
 
 unsigned long greenLightStartTime = 0; // Stores the time the green light was turned on
 bool greenLightOn = false;
+
+const int trigPin = 8;
+const int echoPin = 7;
 
 const int motorA1 = 10;
 const int motorA2 = 11;
@@ -25,7 +21,6 @@ const int motorB1 = 6;
 const int motorB2 = 5;
 
 const int servoPin = 9;
-
 
 const int pulseWidthOpen = 1000;
 const int pulseWidthPartialOpen = 1500;
@@ -39,11 +34,13 @@ int motorSpeedTurn = 255;
 int lineCount = 0;
 bool shouldPerformLineCountingAndGrabbing = true;
 
-
 volatile long encoderCountLeft = 0;
 volatile long encoderCountRight = 0;
 unsigned long lastSpeedAdjustTime = 0;
 const unsigned long speedAdjustInterval = 5000;
+
+bool lastLineDetectedOnLeft = true;
+bool lineDetected = false; 
 
 void ISR_encoderCountLeft() {
   encoderCountLeft++;
@@ -53,16 +50,26 @@ void ISR_encoderCountRight() {
   encoderCountRight++;
 }
 
+void moveForward();
+void turnLeft();
+void turnRight();
+void adjustTurn();
+void stopMotors();
+void grabObject();
+void releaseObject();
+void controlGripper(int pulseWidth);
+int calculateLineThreshold();
+void performLineCountingAndGrabbing();
+void measureAndAdjustSpeed();
+void updateGreenLight();
+void turnLeft90Degrees();
+
 void setup() {
-
-  // These lines are specifically to support the Adafruit Trinket 5V 16 MHz.
-  // Any other board, you can remove this part (but no harm leaving it):
-#if defined(__AVR_ATtiny85__) && (F_CPU == 16000000)
+  #if defined(__AVR_ATtiny85__) && (F_CPU == 16000000)
   clock_prescale_set(clock_div_1);
-#endif
-  // END of Trinket-specific code.
+  #endif
 
-  pixels.begin(); // INITIALIZE NeoPixel strip object (REQUIRED)
+  pixels.begin();
   
   pinMode(motorA1, OUTPUT);
   pinMode(motorA2, OUTPUT);
@@ -74,47 +81,57 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(3), ISR_encoderCountLeft, RISING);
   attachInterrupt(digitalPinToInterrupt(2), ISR_encoderCountRight, RISING);
 
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+
   for (int i = 0; i < 8; i++) {
     pinMode(lineSensors[i], INPUT);
   }
 
-  Serial.begin(38400);
+  Serial.begin(9600);
   while (!Serial); 
   releaseObject();
   calculateLineThreshold();
 }
 
-
 void loop() {
-  calculateLineThreshold();
   if (shouldPerformLineCountingAndGrabbing) {
     performLineCountingAndGrabbing();
   }
-  else {    
-    if (millis() - lastSpeedAdjustTime > speedAdjustInterval) {
-      measureAndAdjustSpeed();
-      lastSpeedAdjustTime = millis();
-    }
+  else {
+    measureAndAdjustSpeed();
+    updateLineDetectionSide();
+    LineSeek();
+    adjustTurn();
+    float distance = getDistance();
+    if (distance < 20) {
+      stopMotors();
+      delay(100);
+      performObstacleAvoidance();
+    } 
+  }
+}
 
-     updateGreenLight(); //code added for Neopixels.
 
-    int sensorValue0 = analogRead(lineSensors[0]); // Green, middle one
-    int sensorValue1 = analogRead(lineSensors[1]); // A1, left of middle
-    int sensorValue2 = analogRead(lineSensors[2]); // Blue, middle one
-    int sensorValue3 = analogRead(lineSensors[3]); // A3, right of middle
-    int sensorValueA7 = analogRead(lineSensors[6]); // A7, leftmost brown (not used for turn logic here)
-    int sensorValueA5 = analogRead(lineSensors[5]); // A5, rightmost
-
-    if ((sensorValue0 > calculateLineThreshold() || sensorValue1 > calculateLineThreshold() || sensorValue2 > calculateLineThreshold() || sensorValue3 > calculateLineThreshold())) {
+void performObstacleAvoidance() {
+  turnRight();
+  delay(400);
+  moveForward();
+  delay(500);
+  turnLeft();
+  delay(600);
+  bool lineFound = false;
+  while (!lineFound) {
     moveForward();
-    } else {
-      if (sensorValue1 < sensorValue3) {
-          turnRight();
-      } else {
-        turnLeft();
+    for (int i = 0; i <= 3; i++) {
+       if (analogRead(lineSensors[i]) > calculateLineThreshold()) {
+          lineFound = true;
+          stopMotors();
+          break;
       }
     }
-  }
+    delay(10); 
+  } 
 }
 
 
@@ -145,11 +162,8 @@ void grabObject() {
   delay(1000);
 }
 
-//code added for Neopixels.
 void updateGreenLight() {
-  // Check if the green light is on and if 1 second has passed
   if (greenLightOn && millis() - greenLightStartTime >= 1000) {
-    // Turn off green lights
     pixels.setPixelColor(0, pixels.Color(0, 0, 0));
     pixels.setPixelColor(3, pixels.Color(0, 0, 0));
     pixels.show();
@@ -163,45 +177,41 @@ void releaseObject() {
 }
 
 void dropObjectIfAllSensorsDetectBlack() {
-  unsigned long startTime = millis(); // Start the timer
+  unsigned long startTime = millis(); 
   bool allBlackDetected = false;
 
-  while (millis() - startTime < 2000) { // Check for 1 second
-    allBlackDetected = true; // Assume all are detecting black
+  while (millis() - startTime < 2000) { 
+    allBlackDetected = true; 
     for (int i = 0; i < 8; i++) {
       if (analogRead(lineSensors[i]) < calculateLineThreshold()) {
-        allBlackDetected = false; // If any sensor does not detect black, break the loop
+        allBlackDetected = false; 
         break;
       }
     }
 
     if (!allBlackDetected) {
-      // Reset the timer if the condition was not met and start checking again
       startTime = millis();
     }
-    // Insert a small delay to prevent the loop from running too fast
     delay(10);
   }
 
   if (allBlackDetected) {
-    releaseObject(); // Activate the mechanism to drop the object
-    stopMotors(); // Stop the robot
+    releaseObject();
+    delay(500); 
+    stopMotors(); 
 
     while (true) {
-      delay(1000); // A delay to prevent the while loop from consuming too much CPU
+      delay(1000); 
     }
   }
 }
 
-
-
-  void measureAndAdjustSpeed() {
+void measureAndAdjustSpeed() {
     long speedLeft = encoderCountLeft / speedAdjustInterval;
     long speedRight = encoderCountRight / speedAdjustInterval;
     encoderCountLeft = 0; // Reset for next measurement
     encoderCountRight = 0;
   
-    // Adjust motorSpeedForward based on the difference in speed
     if (speedLeft > speedRight) {
       motorSpeedForward -= (speedLeft - speedRight); // Slow down left motor
     } else if (speedRight > speedLeft) {
@@ -209,6 +219,22 @@ void dropObjectIfAllSensorsDetectBlack() {
     }
     motorSpeedForward = constrain(motorSpeedForward, 200, 255);
 }
+
+float getDistance() {
+    digitalWrite(trigPin, LOW);
+    delayMicroseconds(2);
+
+    digitalWrite(trigPin, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(trigPin, LOW);
+
+    unsigned long duration = pulseIn(echoPin, HIGH);
+
+    float distanceCm = duration * 0.034 / 2;
+
+    return distanceCm;
+}
+
 
 void performLineCountingAndGrabbing() {
   if (lineCount < 4) {
@@ -225,10 +251,10 @@ void performLineCountingAndGrabbing() {
   if (lineCount == 4 ) {
     stopMotors();
     grabObject();
-    delay(500); // Delay to showcase the grab action
-    turnLeft90Degrees(); // Turn left 90 degrees after grabbing the object
+    delay(500); 
     shouldPerformLineCountingAndGrabbing = false;
-    lineCount++; // Increment to prevent re-entering this block
+    lineCount++; 
+    turnLeft90Degrees(); 
   }
 }
 
@@ -238,15 +264,16 @@ int checkLines() {
       return 1; // Line detected
     }
   }
-  return 0; // No line detected
+  return 0; 
 }
 
+
 void controlGripper(int pulseWidth) {
-  for (int i = 0; i < 50; i++) { // Generate signal for ~1 second
+  for (int i = 0; i < 50; i++) { 
     digitalWrite(servoPin, HIGH);
-    delayMicroseconds(pulseWidth); // Send high pulse
+    delayMicroseconds(pulseWidth);
     digitalWrite(servoPin, LOW);
-    delayMicroseconds(period - pulseWidth); // Complete the period to 20ms
+    delayMicroseconds(period - pulseWidth);
   }
 }
 
@@ -265,47 +292,108 @@ void stopMotors() {
 }
 
 void turnLeft() {
-  //Code added for Neopixels.
  if (!greenLightOn) {
     pixels.setPixelColor(0, pixels.Color(0, 50, 0));
     pixels.setPixelColor(3, pixels.Color(0, 50, 0));
     pixels.show();
-    greenLightStartTime = millis(); // Record the start time
-    greenLightOn = true; // Indicate that the green light is on
+    greenLightStartTime = millis(); 
+    greenLightOn = true; 
   }
+  Serial.print("Turned left ");
   analogWrite(motorA1, motorSpeedTurn);
   digitalWrite(motorA2, LOW);
-  digitalWrite(motorB1, LOW); // Optionally reduce speed instead of stopping for a smoother turn
+  digitalWrite(motorB1, LOW); 
   digitalWrite(motorB2, LOW);
 }
 
 void turnRight() {
-  //Code added for Neopixels.
   if (!greenLightOn) {
     pixels.setPixelColor(1, pixels.Color(0, 50, 0));
     pixels.setPixelColor(2, pixels.Color(0, 50, 0));
     pixels.show();
-    greenLightStartTime = millis(); // Record the start time
-    greenLightOn = true; // Indicate that the green light is on
+    greenLightStartTime = millis();
+    greenLightOn = true; 
   }
-  
-  digitalWrite(motorA1, LOW); // Optionally reduce speed instead of stopping for a smoother turn
+  Serial.print("Turned right ");
+  digitalWrite(motorA1, LOW); 
   digitalWrite(motorA2, LOW);
   analogWrite(motorB1, motorSpeedTurn);
   digitalWrite(motorB2, LOW);
 }
 
+void adjustTurn() {
+    int sensorValue0 = analogRead(lineSensors[0]); // Green, middle one
+    int sensorValue1 = analogRead(lineSensors[1]); // A1, left of middle
+    int sensorValue2 = analogRead(lineSensors[2]); // Blue, middle one
+    int sensorValue3 = analogRead(lineSensors[3]); // A3, right of middle
 
-void turnLeft90Degrees() {
+   if (sensorValue0 > calculateLineThreshold() || sensorValue1 > calculateLineThreshold()|| sensorValue2 > calculateLineThreshold() || sensorValue3 > calculateLineThreshold()){
+        moveForward();
+    } else {
+      if (sensorValue1 < calculateLineThreshold()) {
+          turnRight();
+      }
+      else if (sensorValue1 > calculateLineThreshold()) {
+          turnLeft();
+      }
+  }
+}
+
+void updateLineDetectionSide() {
+    int sensorValue4 = analogRead(lineSensors[4]);
+    int sensorValue5 = analogRead(lineSensors[5]);
+    int sensorValue6 = analogRead(lineSensors[6]);
+    int sensorValue7 = analogRead(lineSensors[7]);
+
+    if (sensorValue6 > calculateLineThreshold() || sensorValue7 > calculateLineThreshold()) {
+        lastLineDetectedOnLeft = true;
+    } else if (sensorValue4 > calculateLineThreshold() || sensorValue5 > calculateLineThreshold()) {
+        lastLineDetectedOnLeft = false;
+    }
+}
+
+void LineSeek() {
+    if (areAllSensorsBelowThreshold()) {
+        do {
+            if (lastLineDetectedOnLeft) {
+                turnRight();
+            } else {
+                Serial.println("Turning left due to previous right detection...");
+                turnLeft();
+            }
+
+            lineDetected = analogRead(lineSensors[0]) > calculateLineThreshold() ||
+                           analogRead(lineSensors[1]) > calculateLineThreshold() ||
+                           analogRead(lineSensors[2]) > calculateLineThreshold() ||
+                           analogRead(lineSensors[3]) > calculateLineThreshold();
+            
+            delay(10); 
+        } while (!lineDetected); 
+
+        stopMotors(); 
+    }
+}
+
+
+
+bool areAllSensorsBelowThreshold() {
+    for (int i = 0; i < 8; i++) {
+        if (analogRead(lineSensors[i]) > calculateLineThreshold()) {
+            return false; 
+        }
+    }
+    return true;
+}
+
+
+
+ void turnLeft90Degrees() {
   int sensorValue0, sensorValue1, sensorValue2, sensorValue3, sensorValueA7, sensorValueA5;
-
-  // Start turning
   digitalWrite(motorA1, LOW);
   analogWrite(motorA2, motorSpeedTurn); 
   analogWrite(motorB1, motorSpeedTurn);
   digitalWrite(motorB2, LOW);
 
-  // Continuously check sensor values
   do {
     sensorValue0 = analogRead(lineSensors[0]); // Middle sensor 1
     sensorValue1 = analogRead(lineSensors[1]); // Middle sensor 2 (left of middle)

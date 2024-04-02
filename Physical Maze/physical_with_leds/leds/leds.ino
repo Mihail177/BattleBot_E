@@ -184,6 +184,7 @@ void rotateCounterAxis()
   analogWrite(motorRightForward, 0);
   analogWrite(motorRightBackwards,255);
 }
+
 void rotatePulses(int nrOfPulses)
 {
   stopRobot();
@@ -200,13 +201,13 @@ void rotatePulses(int nrOfPulses)
     {
       if(countLeft == lastCountLeft && countRight == lastCountRight)
       { //wheel has not pulsed yet
-        if(millis() > movementBuffer && distanceLeft < 3)
+        if(millis() > movementBuffer && distanceLeft < 6)
         { //if not moved for duration
           movementBuffer = millis() + movementStuckBufferDelay;
           moveBackwardsRotateRight();
           wait(400);
         }
-        else if (millis() > movementBuffer && distanceLeft >= 3)
+        else if (millis() > movementBuffer && distanceLeft >= 6)
         {
           movementBuffer = millis() + movementStuckBufferDelay;
           moveBackwardsRotateLeft();
@@ -340,6 +341,24 @@ void setup() {
   countRight=0; 
 }
 
+void calibrateRobotWhileDriving()
+{
+  if(distanceLeft<12)
+  {
+  analogWrite(motorRightBackwards,200);
+  analogWrite(motorLeftBackwards,255);
+  analogWrite(motorRightForward, 0);
+  analogWrite(motorLeftForward,0);
+  }
+  else if(distanceLeft>15 && distanceLeft<20)
+  {
+  analogWrite(motorRightBackwards,255);
+  analogWrite(motorLeftBackwards,200);
+  analogWrite(motorRightForward, 0);
+  analogWrite(motorLeftForward,0);
+  }
+}
+
 //===[ LOOP ]============================
 
 void loop()
@@ -351,15 +370,17 @@ void loop()
    if (distanceLeft<=15&&distanceFront>=15)
    {
     moveForwardOnPulses(31);
+    calibrateRobotWhileDriving();
     stopRobot();
     wait(200);
+    
    }
-   else if(distanceLeft>15 && distanceFront>15)
+   else if(distanceLeft>20 && distanceFront>15)
     {
       rotatePulses(31);
       stopRobot();
       wait(200);
-      moveForwardOnPulses(25);
+      moveForwardOnPulses(21);
 //      rotatePulses(50);
     }
    else if(distanceLeft<20&&distanceFront<=20)
@@ -382,13 +403,13 @@ void loop()
       countLeft=0;
       countRight=0;
       rotatePulses(70);
-      moveForwardOnPulses(50);
+      moveForwardOnPulses(31);
       hasStarted = true;
     }
     else {
       wait(1000);
       getDistanceFront();
-      if(distanceFront < 15){
+      if(distanceFront < 25){
         openGripper();
         wait(1500);
         hasInitiatedStart = true;

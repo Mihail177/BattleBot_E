@@ -109,7 +109,7 @@ void loop() {
   static bool startConditionMet = false; 
   if (executionStage == 0 && !startConditionMet) {
     float startDistance = getDistance();
-    if (startDistance < 30) {
+    if (startDistance > 20) {
       startConditionMet = true; 
     } else {
       return; 

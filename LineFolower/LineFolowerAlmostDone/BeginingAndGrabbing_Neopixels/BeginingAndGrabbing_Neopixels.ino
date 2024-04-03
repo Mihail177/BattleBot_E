@@ -106,35 +106,47 @@ void setup() {
 }
 
 void loop() {
-  if (executionStage == 0) {
-     if (shouldPerformLineCountingAndGrabbing) {
-    performLineCountingAndGrabbing();
+  static bool startConditionMet = false; 
+  if (executionStage == 0 && !startConditionMet) {
+    float startDistance = getDistance();
+    if (startDistance < 30) {
+      startConditionMet = true; 
+    } else {
+      return; 
+    }
   }
-  else {
-    measureAndAdjustSpeed();
-    updateLineDetectionSide();
-    LineSeek();
-    adjustTurn();
-    blackLineDetectedFor2Seconds();
-    float distance = getDistance();
-    if (distance < 20) {
+  if (startConditionMet) {
+    if (executionStage == 0) {
+      if (shouldPerformLineCountingAndGrabbing) {
+        performLineCountingAndGrabbing();
+      } else {
+        measureAndAdjustSpeed();
+        updateLineDetectionSide();
+        LineSeek();
+        adjustTurn();
+          if (blackLineDetectedFor2Seconds()) {
+          stopMotors();
+          }
+        executionStage = 1;
+        float distance = getDistance();
+        if (distance < 20) {
+          stopMotors();
+          delay(100);
+          performObstacleAvoidance();
+        }
+      }
+    }
+    else if (executionStage == 1) {
+      releaseObject();
+      moveBackward();
+      delay(500);
+      executionStage = 2;
+    } else if (executionStage == 2) {
       stopMotors();
-      delay(100);
-      performObstacleAvoidance();
     }
   }
-  }
-   else if (executionStage == 1) {
-    releaseObject(); 
-    moveBackward();
-    executionStage = 2;
-    
-  }
-  else if (executionStage == 2){
-    executionStage = 2;
-    stopMotors();
-    }
 }
+
 
 bool blackLineDetectedFor2Seconds() {
     static unsigned long startTime = 0; 

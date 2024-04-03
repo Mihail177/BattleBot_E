@@ -124,10 +124,10 @@ void loop() {
         updateLineDetectionSide();
         LineSeek();
         adjustTurn();
-          if (blackLineDetectedFor2Seconds()) {
-          stopMotors();
-          }
+        if (blackLineDetectedFor2Seconds()) {
+        stopMotors();
         executionStage = 1;
+      }
         float distance = getDistance();
         if (distance < 20) {
           stopMotors();
@@ -137,6 +137,8 @@ void loop() {
       }
     }
     else if (executionStage == 1) {
+      moveBackward();
+      delay(100);
       releaseObject();
       moveBackward();
       delay(500);
@@ -150,9 +152,9 @@ void loop() {
 
 bool blackLineDetectedFor2Seconds() {
     static unsigned long startTime = 0; 
-    const long detectionPeriod = 700; 
+    const long detectionPeriod = 100; 
     bool allBlackDetected = true;
-
+    
     for (int i = 0; i < 8; i++) {
         if (analogRead(lineSensors[i]) < calculateLineThreshold()) {
             allBlackDetected = false;
@@ -164,6 +166,7 @@ bool blackLineDetectedFor2Seconds() {
         if (startTime == 0) {
             startTime = millis();
         } else if (millis() - startTime >= detectionPeriod) {
+            stopMotors();
             startTime = 0; 
             executionStage = 1;
             return true; 

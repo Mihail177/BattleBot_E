@@ -1,4 +1,3 @@
-//code added for Neopixels.
 #include <Adafruit_NeoPixel.h>
 #ifdef __AVR__
 #include <avr/power.h>
@@ -74,6 +73,7 @@ bool blackLineDetectedFor2Seconds();
 float getDistance();
 void performObstacleAvoidance();
 void startObstacleAvoidance();
+void cycleRandomColors();
 
 void setup() {
   #if defined(__AVR_ATtiny85__) && (F_CPU == 16000000)
@@ -112,6 +112,7 @@ void loop() {
     if (startDistance > 20) {
       startConditionMet = true; 
     } else {
+      cycleRandomColors();
       return; 
     }
   }
@@ -145,10 +146,19 @@ void loop() {
       executionStage = 2;
     } else if (executionStage == 2) {
       stopMotors();
+      cycleRandomColors();
     }
   }
 }
 
+void cycleRandomColors() {
+  for(int i = 0; i < NUMPIXELS; i++) {
+    uint32_t color = pixels.Color(random(0, 256), random(0, 256), random(0, 256));
+    pixels.setPixelColor(i, color);
+    pixels.show();
+    delay(100);
+  }
+}
 
 bool blackLineDetectedFor2Seconds() {
     static unsigned long startTime = 0; 
@@ -190,13 +200,13 @@ void performObstacleAvoidance() {
   while (!obstacleAvoided) {
     timeSinceStart = millis() - actionStartTime;
 
-    if (timeSinceStart < 400) {
+    if (timeSinceStart < 300) {
       turnRight();
     }
-    else if (timeSinceStart >= 400 && timeSinceStart < 1100) {
+    else if (timeSinceStart >= 300 && timeSinceStart < 1000) {
       moveForward();
     }
-    else if (timeSinceStart >= 1100 && timeSinceStart < 1700) {
+    else if (timeSinceStart >= 1000 && timeSinceStart < 1500) {
       turnLeft();
     }
     else {
@@ -324,62 +334,75 @@ void controlGripper(int pulseWidth) {
   }
 }
 
-void moveForward() {
-  digitalWrite(motorA1, motorSpeedForward);
-  digitalWrite(motorA2, LOW);
-  digitalWrite(motorB1, motorSpeedForward);
-  digitalWrite(motorB2, LOW);
+void moveBackward() {
+  for(int i = 0; i < NUMPIXELS; i++) {
+    pixels.setPixelColor(i, pixels.Color(255, 255, 0)); // Yellow color
+  }
+  pixels.show();
+
+  digitalWrite(motorA1, LOW);
+  digitalWrite(motorA2, HIGH);
+  digitalWrite(motorB1, LOW);
+  digitalWrite(motorB2, HIGH);
 }
 
+
 void stopMotors() {
+  for(int i = 0; i < NUMPIXELS; i++) {
+    pixels.setPixelColor(i, pixels.Color(255, 0, 0)); 
+  }
+  pixels.show();
+
   digitalWrite(motorA1, LOW);
   digitalWrite(motorA2, LOW);
   digitalWrite(motorB1, LOW);
   digitalWrite(motorB2, LOW);
 }
 
+
 void turnLeft() {
- if (!greenLightOn) {
-    pixels.setPixelColor(0, pixels.Color(0, 50, 0));
-    pixels.setPixelColor(3, pixels.Color(0, 50, 0));
-    pixels.show();
-    greenLightStartTime = millis(); 
-    greenLightOn = true; 
+ for(int i = 0; i < NUMPIXELS; i++) {
+    pixels.setPixelColor(i, pixels.Color(255, 0, 255)); 
   }
-  Serial.print("Turned left ");
+  pixels.show();
+
   analogWrite(motorA1, motorSpeedTurn);
   digitalWrite(motorA2, LOW);
   digitalWrite(motorB1, LOW); 
   digitalWrite(motorB2, LOW);
 }
 
+
 void turnRight() {
-  if (!greenLightOn) {
-    pixels.setPixelColor(1, pixels.Color(0, 50, 0));
-    pixels.setPixelColor(2, pixels.Color(0, 50, 0));
-    pixels.show();
-    greenLightStartTime = millis();
-    greenLightOn = true; 
+  for(int i = 0; i < NUMPIXELS; i++) {
+    pixels.setPixelColor(i, pixels.Color(255, 255, 0)); 
   }
-  Serial.print("Turned right ");
+  pixels.show();
+
   digitalWrite(motorA1, LOW); 
   digitalWrite(motorA2, LOW);
   analogWrite(motorB1, motorSpeedTurn);
   digitalWrite(motorB2, LOW);
 }
 
-void moveBackward() {
-    digitalWrite(motorA1, LOW);
-    digitalWrite(motorA2, HIGH);
-    digitalWrite(motorB1, LOW);
-    digitalWrite(motorB2, HIGH);
+void moveForward() {
+  for(int i = 0; i < NUMPIXELS; i++) {
+    pixels.setPixelColor(i, pixels.Color(0, 255, 0)); 
+  }
+  pixels.show();
+
+  digitalWrite(motorA1, HIGH);
+  digitalWrite(motorA2, LOW);
+  digitalWrite(motorB1, HIGH);
+  digitalWrite(motorB2, LOW);
 }
 
+
 void adjustTurn() {
-    int sensorValue0 = analogRead(lineSensors[0]); // Green, middle one
-    int sensorValue1 = analogRead(lineSensors[1]); // A1, left of middle
-    int sensorValue2 = analogRead(lineSensors[2]); // Blue, middle one
-    int sensorValue3 = analogRead(lineSensors[3]); // A3, right of middle
+    int sensorValue0 = analogRead(lineSensors[0]); 
+    int sensorValue1 = analogRead(lineSensors[1]); 
+    int sensorValue2 = analogRead(lineSensors[2]);
+    int sensorValue3 = analogRead(lineSensors[3]); 
 
    if (sensorValue0 > calculateLineThreshold() || sensorValue1 > calculateLineThreshold()
        || sensorValue2 > calculateLineThreshold() || sensorValue3 > calculateLineThreshold()){

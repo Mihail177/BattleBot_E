@@ -138,7 +138,7 @@ void loop() {
     }
     else if (executionStage == 1) {
       moveBackward();
-      delay(100);
+      delay(200);
       releaseObject();
       moveBackward();
       delay(500);

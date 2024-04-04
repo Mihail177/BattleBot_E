@@ -6,6 +6,9 @@ const int leftN=5;
 const int rightP=11; 
 const int rightN=10; 
 
+const int trigPin = 8;
+const int echoPin = 4;
+
 #define R2 2 //Right wheel
 #define R1 3 //Left wheel
 
@@ -43,6 +46,8 @@ volatile long countR = 0;
 unsigned long lastSpeedAdjustTime = 0;
 const unsigned long speedAdjustInterval = 5000;
 
+int executionStage = 0;
+
 int turnL = 0;
 
 void ISR_L(){
@@ -69,6 +74,9 @@ void colorForward();
 void colorStop();
 void getSensorsValues();
 void solveMaze();
+void stop();
+void moveBackward();
+bool blackLineDetectedFor2Seconds();
 
 void setup() {
   strip.begin();
@@ -90,8 +98,10 @@ void setup() {
   
   attachInterrupt(digitalPinToInterrupt(R2), ISR_R, CHANGE);
   attachInterrupt(digitalPinToInterrupt(R1), ISR_L, CHANGE);
-  
 
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+  
   Serial.begin(9600);
   while (!Serial); 
   releaseObject();  // gripper open
@@ -100,38 +110,56 @@ void setup() {
 
 
 void loop() {
+  static bool startConditionMet = false; 
+  if (executionStage == 0 && !startConditionMet) {
+    float startDistance = getDistance();
+    if (startDistance > 20) {
+      startConditionMet = true;
+    }
+  } 
+  
   getSensorsValues();
   calculateLineThreshold();
-  if (shouldPerformLineCountingAndGrabbing) { //this part of code makes sure to run this only ones and then ignore
-    performLineCountingAndGrabbing();
-  }
-  else 
-  {
-//      if( sensors[0] && sensors[1] && sensors[2] && sensors[3] && sensors[4]&& sensors[5] && sensors[6] && sensors[7]){
-//      Serial.print("YES");
-//      moveForward();
-//      if(sensors[0] && sensors[1] && sensors[2] && sensors[3] && sensors[4]&& sensors[5] && sensors[6] && sensors[7]){
-//          moveForward();
-//        // Step back a little bit   
-//          analogWrite(leftP, 100);
-//          analogWrite(leftN, 255);
-//          analogWrite(rightP, 100);
-//          analogWrite(rightN, 255);
-//          delay(500); // Adjust the delay based on how much you want the robot to step back
-//        
-//          // Drop the object (open the gripper)
-//          releaseObject();
-//          delay(1000); // Delay to showcase the drop action
-//         
-//          // Stop the robot
-//          stop();
-//    }
-//   }
-//    else {
-      solveMaze(); 
+
+ if (startConditionMet) { 
+    if (shouldPerformLineCountingAndGrabbing) { //this part of code makes sure to run this only ones and then ignore
+      performLineCountingAndGrabbing();
+    }
+    else 
+    {
+        solveMaze();
+  //      if (blackLineDetectedFor2Seconds()) {
+  //        stop();
+  //        executionStage = 1; 
+  //      } else if (executionStage == 1) {
+  //      moveBackward();
+  //      delay(200);
+  //      releaseObject();
+  //      moveBackward();
+  //      delay(500);
+  //      executionStage = 2;
+  //      } 
+  //      else if (executionStage == 2) {
+  //      stop();
+  //    }      
     }
   }
+}
 
+float getDistance() {
+    digitalWrite(trigPin, LOW);
+    delayMicroseconds(2);
+
+    digitalWrite(trigPin, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(trigPin, LOW);
+
+    unsigned long duration = pulseIn(echoPin, HIGH);
+
+    float distanceCm = duration * 0.034 / 2;
+
+    return distanceCm;
+}
 
 
 //Movements
@@ -203,6 +231,14 @@ void stop(){
     analogWrite(rightP, 0);
     delay(500);
     }
+
+void moveBackward() {
+  analogWrite(leftN, 0); 
+  analogWrite(leftP, 255);   
+  analogWrite(rightN, 0); 
+  analogWrite(rightP, 255);  
+}
+
 
 //Function to calculate the Threshold value
 
@@ -420,7 +456,35 @@ void controlGripper(int pulseWidth) { //Function to control gripper without Serv
   }
 }
 
-//Function to drop the object and finish the maze
+bool blackLineDetectedFor2Seconds() {
+    static unsigned long startTime = 0; 
+    const long detectionPeriod = 50; 
+    bool allBlackDetected = true;
+    
+    for (int i = 0; i < 8; i++) {
+        if (analogRead(sensorPins[i]) < calculateLineThreshold()) {
+            allBlackDetected = false;
+            break;
+        }
+    }
+
+    if (allBlackDetected) {
+        if (startTime == 0) {
+            startTime = millis();
+        } else if (millis() - startTime >= detectionPeriod) {
+            stop();
+            startTime = 0; 
+            executionStage = 1;
+            return true; 
+        }
+    } else {
+        startTime = 0;
+    }
+
+    return false;
+}
+
+
 
 //void dropObjectAndStop() {
 //  

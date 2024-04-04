@@ -43,6 +43,8 @@ volatile long countR = 0;
 unsigned long lastSpeedAdjustTime = 0;
 const unsigned long speedAdjustInterval = 5000;
 
+int executionStage = 0;
+
 int turnL = 0;
 
 void ISR_L(){
@@ -69,6 +71,9 @@ void colorForward();
 void colorStop();
 void getSensorsValues();
 void solveMaze();
+void stop();
+void moveBackward();
+bool blackLineDetectedFor2Seconds();
 
 void setup() {
   strip.begin();
@@ -128,9 +133,23 @@ void loop() {
 //    }
 //   }
 //    else {
-      solveMaze(); 
+      solveMaze();
+      if (blackLineDetectedFor2Seconds()) {
+        stop();
+        executionStage = 1; 
+      } else if (executionStage == 1) {
+      moveBackward();
+      delay(200);
+      releaseObject();
+      moveBackward();
+      delay(500);
+      executionStage = 2;
+      } else if (executionStage == 2) {
+      stop();
     }
+      
   }
+}
 
 
 
@@ -203,6 +222,14 @@ void stop(){
     analogWrite(rightP, 0);
     delay(500);
     }
+
+void moveBackward() {
+  analogWrite(leftN, 0); 
+  analogWrite(leftP, 255);   
+  analogWrite(rightN, 0); 
+  analogWrite(rightP, 255);  
+}
+
 
 //Function to calculate the Threshold value
 
@@ -420,7 +447,35 @@ void controlGripper(int pulseWidth) { //Function to control gripper without Serv
   }
 }
 
-//Function to drop the object and finish the maze
+bool blackLineDetectedFor2Seconds() {
+    static unsigned long startTime = 0; 
+    const long detectionPeriod = 100; 
+    bool allBlackDetected = true;
+    
+    for (int i = 0; i < 8; i++) {
+        if (analogRead(sensorPins[i]) < calculateLineThreshold()) {
+            allBlackDetected = false;
+            break;
+        }
+    }
+
+    if (allBlackDetected) {
+        if (startTime == 0) {
+            startTime = millis();
+        } else if (millis() - startTime >= detectionPeriod) {
+            stop();
+            startTime = 0; 
+            executionStage = 1;
+            return true; 
+        }
+    } else {
+        startTime = 0;
+    }
+
+    return false;
+}
+
+
 
 //void dropObjectAndStop() {
 //  

@@ -45,8 +45,7 @@ bool lineDetected = false;
 
 unsigned long actionStartTime = 0;
 bool isActionInProgress = false; 
-enum class RobotState { CHECKING, DROP_OBJECT, MOVE_BACK, STOP }; 
-RobotState currentState = RobotState::CHECKING;
+bool isAvoidingObstacle = false;
 
 void ISR_encoderCountLeft() {
   encoderCountLeft++;
@@ -74,6 +73,7 @@ void LineSeek();
 bool blackLineDetectedFor2Seconds();
 float getDistance();
 void performObstacleAvoidance();
+void startObstacleAvoidance();
 
 void setup() {
   #if defined(__AVR_ATtiny85__) && (F_CPU == 16000000)
@@ -124,15 +124,15 @@ void loop() {
         updateLineDetectionSide();
         LineSeek();
         adjustTurn();
-        if (blackLineDetectedFor2Seconds()) {
-        stopMotors();
-        executionStage = 1;
-      }
         float distance = getDistance();
         if (distance < 20) {
           stopMotors();
-          delay(100);
+          startObstacleAvoidance();
           performObstacleAvoidance();
+        }
+        if (blackLineDetectedFor2Seconds()) {
+        stopMotors();
+        executionStage = 1; 
         }
       }
     }
@@ -177,26 +177,44 @@ bool blackLineDetectedFor2Seconds() {
 
     return false;
 }
+void startObstacleAvoidance() {
+  isAvoidingObstacle = true;
+  actionStartTime = millis(); 
+}
 
 void performObstacleAvoidance() {
-  turnRight();
-  delay(400);
-  moveForward();
-  delay(700);
-  turnLeft();
-  delay(600);
-  bool lineFound = false;
-  while (!lineFound) {
-    moveForward();
-    for (int i = 0; i <= 3; i++) {
-       if (analogRead(lineSensors[i]) > calculateLineThreshold()) {
-          lineFound = true;
+  unsigned long actionStartTime = millis();
+  unsigned long timeSinceStart = 0;
+  bool obstacleAvoided = false; // This flag will be true once the obstacle avoidance sequence is complete.
+
+  while (!obstacleAvoided) {
+    timeSinceStart = millis() - actionStartTime;
+
+    if (timeSinceStart < 400) {
+      turnRight();
+    }
+    else if (timeSinceStart >= 400 && timeSinceStart < 1100) {
+      moveForward();
+    }
+    else if (timeSinceStart >= 1100 && timeSinceStart < 1700) {
+      turnLeft();
+    }
+    else {
+      moveForward();
+      for (int i = 0; i <= 3; i++) {
+        if (analogRead(lineSensors[i]) > calculateLineThreshold()) {
           stopMotors();
+          obstacleAvoided = true;
+          break;
+        }
+      }
+      if (obstacleAvoided) {
           break;
       }
     }
-  } 
+  }
 }
+
 
 int calculateLineThreshold() {
   static int calculatedLineThreshold = -1;
@@ -216,7 +234,7 @@ int calculateLineThreshold() {
 
 void grabObject() {
   controlGripper(pulseWidthOpen);
-  delay(1000);
+  delay(200);
 }
 
 void releaseObject() {
@@ -264,20 +282,24 @@ float getDistance() {
 
 
 void performLineCountingAndGrabbing() {
+  static unsigned long lastLineTime = 0;
+  unsigned long currentTime = millis();
+  
   if (lineCount < 4) {
     moveForward();
     int lineDetected = checkLines();
-    if (lineDetected) {
+    if (lineDetected && currentTime - lastLineTime >= 200) {
       lineCount++;
-      delay(200); 
+      lastLineTime = currentTime; 
     }
   }
-
   if (lineCount == 4 ) {
     stopMotors();
     grabObject();
-    delay(500); 
     shouldPerformLineCountingAndGrabbing = false;
+    do {
+    moveForward();
+    } while (!areAllSensorsBelowThreshold());
     lineCount++; 
     turnLeft90Degrees(); 
   }
@@ -286,7 +308,7 @@ void performLineCountingAndGrabbing() {
 int checkLines() {
   for (int i = 0; i < 8; i++) {
     if (analogRead(lineSensors[i]) > calculateLineThreshold()) {
-      return 1; // Line detected
+      return 1; 
     }
   }
   return 0; 

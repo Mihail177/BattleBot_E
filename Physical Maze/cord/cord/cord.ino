@@ -133,7 +133,7 @@ void moveForward()
 {
   leds.fill(BLUE,0,4);
   leds.show();
-  analogWrite(motorLeftForward,235);
+  analogWrite(motorLeftForward,230);
   analogWrite(motorRightForward,255);
   analogWrite(motorRightBackwards,0);
   analogWrite(motorLeftBackwards,0);
@@ -173,11 +173,16 @@ void turnLeft()
 }
 void adjustLeft()
 {
-  leds.fill(RED, 0, 4);
-  leds.show();
   analogWrite(motorLeftBackwards,0);
   analogWrite(motorLeftForward, 255);
   analogWrite(motorRightForward, 210);
+  analogWrite(motorRightBackwards,0);
+}
+void adjustRight()
+{
+  analogWrite(motorLeftBackwards,0);
+  analogWrite(motorLeftForward, 160);
+  analogWrite(motorRightForward, 255);
   analogWrite(motorRightBackwards,0);
 }
 void rotateCounterAxis()
@@ -237,6 +242,10 @@ void moveForwardOnPulses(int nrOfPulses)
   {
     adjustLeft();
   }
+  else if(distanceLeft>=13 && distanceLeft<20)
+  {
+    adjustRight();
+  }
   else
   {
     moveForward();
@@ -251,7 +260,7 @@ void moveForwardOnPulses(int nrOfPulses)
           leds.fill(WHITE, 0, 4);
           leds.show();
           moveBackwards();
-          wait(100);
+          wait(150);
           moveBackwardsRotate();
           wait(250);
 //          getDistanceLeft();
@@ -297,7 +306,7 @@ void CountB()
 void getDistanceLeft()
 {
   digitalWrite(trigPinLeft, HIGH);
-  delayMicroseconds(2);
+  delayMicroseconds(10);
   digitalWrite(trigPinLeft, LOW);
   // Reads the echoPin, returns the sound wave travel time in microseconds
   durationLeft = pulseIn(echoPinLeft, HIGH);
@@ -308,7 +317,7 @@ void getDistanceLeft()
 void getDistanceFront()
 {  
   digitalWrite(trigPinFront, HIGH);
-  delayMicroseconds(2);
+  delayMicroseconds(10);
   digitalWrite(trigPinFront, LOW);
   // Reads the echoPin, returns the sound wave travel time in microseconds
   durationFront = pulseIn(echoPinFront, HIGH);
@@ -383,7 +392,7 @@ void loop()
     hasStarted = false;
     hasInitiatedStart = false;
    }
-   if (distanceLeft<=12&&distanceFront>=12)
+   if (distanceLeft<=17&&distanceFront>=12)
    {
     moveForwardOnPulses(10);
     stopRobot();

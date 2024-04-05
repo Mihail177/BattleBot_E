@@ -110,40 +110,36 @@ void setup() {
 
 
 void loop() {
-  static bool startConditionMet = false; 
-  if (executionStage == 0 && !startConditionMet) {
-    float startDistance = getDistance();
-    if (startDistance > 20) {
-      startConditionMet = true;
-    }
-  } 
-  
-  getSensorsValues();
-  calculateLineThreshold();
+    static bool startConditionMet = false;
+    static bool objectDetected = false;
+    static unsigned long objectDetectedTime = 0;
 
- if (startConditionMet) { 
-    if (shouldPerformLineCountingAndGrabbing) { //this part of code makes sure to run this only ones and then ignore
-      performLineCountingAndGrabbing();
+    if (!objectDetected) {
+        float distance = getDistance();
+        if (distance <= 25 && distance > 0) {
+            objectDetected = true;
+            objectDetectedTime = millis();
+        }
+    } else {
+        unsigned long currentTime = millis();
+        if (currentTime - objectDetectedTime >= 5000) { // Wait for 5 seconds
+            // Start the void loop
+            startConditionMet = true;
+            objectDetected = false; // Reset object detected flag
+        }
     }
-    else 
-    {
-        solveMaze();
-  //      if (blackLineDetectedFor2Seconds()) {
-  //        stop();
-  //        executionStage = 1; 
-  //      } else if (executionStage == 1) {
-  //      moveBackward();
-  //      delay(200);
-  //      releaseObject();
-  //      moveBackward();
-  //      delay(500);
-  //      executionStage = 2;
-  //      } 
-  //      else if (executionStage == 2) {
-  //      stop();
-  //    }      
-    }
-  }
+
+    // Your existing code continues from here...
+    getSensorsValues();
+    calculateLineThreshold();
+
+    if (startConditionMet) {
+        if (shouldPerformLineCountingAndGrabbing) {
+            performLineCountingAndGrabbing();
+            } else {
+            solveMaze();
+        }
+   }
 }
 
 float getDistance() {
@@ -427,11 +423,12 @@ void performLineCountingAndGrabbing() { //Function for grabbing and starting
     stop();
     grabObject();
     delay(500); // Delay to showcase the grab action
+    
 //    turnUntilMeetTheLine();// Turn left 90 degrees after grabbing the object
-    analogWrite(rightP, 240);
-    analogWrite(rightN, 10);
-    analogWrite(leftP, 10);
-    analogWrite(leftN, 10);
+    analogWrite(rightP, 255);
+    analogWrite(rightN, 0);
+    analogWrite(leftP, 0);
+    analogWrite(leftN, 0);
     turnL++;
     shouldPerformLineCountingAndGrabbing = false;
     lineCount++; // Increment to prevent re-entering this block
@@ -483,36 +480,3 @@ bool blackLineDetectedFor2Seconds() {
 
     return false;
 }
-
-
-
-//void dropObjectAndStop() {
-//  
-//  getSensorsValues();
-  // Check if all line sensors detect black
-  
-//    if (!sensors[0] || !sensors[1] || !sensors[2] || !sensors[3] || !sensors[4] || !sensors[5] || !sensors[6] || !sensors[7]) {
-//      break; // No need to continue checking if one sensor detects white
-//    } else if (sensors[0] && sensors[1] && sensors[2] && sensors[3] && sensors[4]&& sensors[5] && sensors[6] && sensors[7]) { // If all sensors detect black
-//    
-//      moveForwardBeforeTurn();
-//      
-//      if(sensors[0] && sensors[1] && sensors[2] && sensors[3] && sensors[4]&& sensors[5] && sensors[6] && sensors[7]){
-//        // Step back a little bit
-//        
-//        analogWrite(leftP, 100);
-//        analogWrite(leftN, 255);
-//        analogWrite(rightP, 100);
-//        analogWrite(rightN, 255);
-//        delay(500); // Adjust the delay based on how much you want the robot to step back
-//      
-//        // Drop the object (open the gripper)
-//        releaseObject();
-//        delay(1000); // Delay to showcase the drop action
-//       
-//        // Stop the robot
-//        stop();
-//      } else {
-//        break;
-//      }
-//  }

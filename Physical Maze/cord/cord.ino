@@ -1,32 +1,22 @@
-#include <SoftwareSerial.h>
 #include <Adafruit_NeoPixel.h>
+#include <SoftwareSerial.h>
 
 boolean hasInitiatedStart = false;
 boolean hasStarted = false;
 
-const int lineSensors[] = {A0, A1, A2, A3, A4,A6, A7};
+const int lineSensors[] = {A0, A1, A2, A3, A4, A6, A7};
 int lineSensorSensitivity = 700;
-
-#define PIN 13
-#define NUMPIXELS 4
-
-#define LEFT_BACK_LED 0
-#define LEFT_FRONT_LED 3
-#define RIGHT_BACK_LED 1
-#define RIGHT_FRONT_LED 2
-
-Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
 
 //===[ Gripper ]===================================
 const int GRIPPER_PIN=6;
 const int GRIPPER_OPEN_PULSE=1600;
-const int GRIPPER_CLOSE_PULSE=971;
+const int GRIPPER_CLOSE_PULSE=970;
 const int GRIPPER_PULSE_REPEAT=10;
 //===[ Time variables ]=============================
 unsigned long time;
 
 
-//===[ DistanceSenzors ]============================
+//===[ DistanceSensors ]============================
 
 long durationFront;
 int distanceFront;
@@ -45,7 +35,7 @@ const int motorRightBackwards=10;
 const int motorRightForward=9;  
 const int motorLeftBackwards=5;
 const int motorLeftForward=11;
-const int movementStuckBufferDelay=1000;
+const int movementStuckBufferDelay=1700;
 
 //===[ Motor tests for pulses ]====================
 
@@ -56,37 +46,94 @@ int countRight=0;
 int countsLeft=0,previousCountLeft;
 int countsRight=0,previousCountRight;
 
+
+//===[ Led Pixels ]================================
+
+const int PIXEL_PIN=13;
+const int PIXEL_NUMBER=4;
+Adafruit_NeoPixel leds(PIXEL_NUMBER, PIXEL_PIN, NEO_RGB + NEO_KHZ800);
+const uint32_t RED=leds.Color(255,0,0);
+const uint32_t YELLOW=leds.Color(255,150,0);
+const uint32_t BLUE=leds.Color(0,0,255);
+const uint32_t WHITE=leds.Color(255,255,255);
+const uint32_t START=leds.Color(0,0,0);
+
 //===[ Functions ]=================================
 
-boolean isBlackZone(){
+boolean isBlackZone()
+{
   int count = 0;
-  for(int i = 0; i < 7; i++){
-    if(analogRead(lineSensors[i]) > lineSensorSensitivity){
+  for(int i = 0; i < 7; i++)
+  {
+    if(analogRead(lineSensors[i]) > lineSensorSensitivity)
+    {
       count ++;
     }
   }
-  if(count < 4){
+  if(count < 6)
+  {
     return false;
   }
   return true;
 }
 
-void setup_motor_pins()
+void setupLineSensors()
+{
+ pinMode(A0, INPUT);
+ pinMode(A1, INPUT);
+ pinMode(A2, INPUT);
+ pinMode(A3, INPUT);
+ pinMode(A4, INPUT);
+ pinMode(A6, INPUT);
+ pinMode(A7, INPUT);
+}
+
+//void followLine()
+//{
+//  if(analogRead(lineSensors[2]) > lineSensorSensitivity && analogRead(lineSensors[3]) > lineSensorSensitivity)
+//  {
+//    analogWrite(motorLeftForward, 255);
+//    analogWrite(motorRightForward, 120);
+//  }
+//  else if(analogRead(lineSensors[4]) > lineSensorSensitivity && analogRead(lineSensors[5]) > lineSensorSensitivity)
+//  {
+//    analogWrite(motorLeftForward, 120);
+//    analogWrite(motorRightForward, 255);
+//  }
+//  else if(analogRead(lineSensors[1]) > lineSensorSensitivity && analogRead(lineSensors[2]) > lineSensorSensitivity)
+//  {
+//    analogWrite(motorLeftForward, 255);
+//    analogWrite(motorRightForward, 0);
+//  }
+//  else if(analogRead(lineSensors[5]) > lineSensorSensitivity && analogRead(lineSensors[6]) > lineSensorSensitivity)
+//  {
+//    analogWrite(motorLeftForward, 0);
+//    analogWrite(motorRightForward, 255);
+//  }
+//  else if(analogRead(lineSensors[1]) > lineSensorSensitivity && analogRead(lineSensors[0]) > lineSensorSensitivity)
+//  {
+//    analogWrite(motorLeftForward, 255);
+//    analogWrite(motorRightForward, 0);
+//  }
+//  else if(analogRead(lineSensors[6])analogRead > lineSensorSensitivity && analogRead(lineSensors[7]) > lineSensorSensitivity)
+//  {
+//    analogWrite(motorLeftForward, 0);
+//    analogWrite(motorRightForward, 255);
+//  }
+//}
+
+void setupMotorPins()
 { 
   pinMode(motorRightBackwards,OUTPUT);
   pinMode(motorRightForward,OUTPUT);
   pinMode(motorLeftBackwards,OUTPUT);
   pinMode(motorLeftForward,OUTPUT);
 }
-void moveForward() // shows green
+void moveForward()
 {
-  strip.setPixelColor(LEFT_BACK_LED, strip.Color(255, 0, 0));
-  strip.setPixelColor(LEFT_FRONT_LED, strip.Color(255, 0, 0));
-  strip.setPixelColor(RIGHT_BACK_LED, strip.Color(255, 0, 0));
-  strip.setPixelColor(RIGHT_FRONT_LED, strip.Color(255, 0, 0));
-  strip.show();
-  
-  analogWrite(motorLeftForward,240);
+  leds.fill(BLUE,0,4);
+  leds.show();
+  analogWrite(motorLeftForward,230);
   analogWrite(motorRightForward,255);
   analogWrite(motorRightBackwards,0);
   analogWrite(motorLeftBackwards,0);
@@ -95,32 +142,21 @@ void moveForward() // shows green
 void moveBackwardsRotate()
 {
   analogWrite(motorRightBackwards,255);
-  analogWrite(motorLeftBackwards,90);
+  analogWrite(motorLeftBackwards,80);
   analogWrite(motorRightForward, 0);
   analogWrite(motorLeftForward,0);
 }
 
 void moveBackwards()
 {
-  strip.setPixelColor(LEFT_BACK_LED, strip.Color(0, 0, 255));
-  strip.setPixelColor(LEFT_FRONT_LED, strip.Color(0, 0, 255));
-  strip.setPixelColor(RIGHT_BACK_LED, strip.Color(0, 0, 255));
-  strip.setPixelColor(RIGHT_FRONT_LED, strip.Color(0, 0, 255));
-  strip.show();
-  
-  analogWrite(motorRightBackwards,200);
-  analogWrite(motorLeftBackwards, 200);
+  analogWrite(motorRightBackwards,255);
+  analogWrite(motorLeftBackwards, 255);
   analogWrite(motorRightForward, 0);
   analogWrite(motorLeftForward,0);
 }
 
-void stopRobot() {
-  strip.setPixelColor(LEFT_BACK_LED, strip.Color(0, 255, 0));
-  strip.setPixelColor(LEFT_FRONT_LED, strip.Color(0, 255, 0));
-  strip.setPixelColor(RIGHT_BACK_LED, strip.Color(0, 255, 0));
-  strip.setPixelColor(RIGHT_FRONT_LED, strip.Color(0, 255, 0));
-  strip.show();
-  
+void stopRobot() 
+{
   analogWrite(motorRightBackwards,0);
   analogWrite(motorRightForward, 0);
   analogWrite(motorLeftBackwards, 0);
@@ -128,45 +164,30 @@ void stopRobot() {
 }
 void turnLeft()
 {
-  strip.setPixelColor(LEFT_BACK_LED, strip.Color(0, 255, 0));
-  strip.setPixelColor(LEFT_FRONT_LED, strip.Color(0, 255, 0));
-  strip.setPixelColor(RIGHT_BACK_LED, strip.Color(255, 0, 0));
-  strip.setPixelColor(RIGHT_FRONT_LED, strip.Color(255, 0, 0));
-  strip.show();
-  
+  leds.fill(RED, 0, 4);
+  leds.show();
   analogWrite(motorLeftBackwards,0);
   analogWrite(motorLeftForward, 0);
-  analogWrite(motorRightForward, 240);
+  analogWrite(motorRightForward, 200);
   analogWrite(motorRightBackwards,0);
 }
 void rotateOnAxis()
 {
-  strip.setPixelColor(LEFT_BACK_LED, strip.Color(0, 0, 255));
-  strip.setPixelColor(LEFT_FRONT_LED, strip.Color(0, 0, 255));
-  strip.setPixelColor(RIGHT_BACK_LED, strip.Color(255, 0, 0));
-  strip.setPixelColor(RIGHT_FRONT_LED, strip.Color(255, 0, 0));
-  strip.show();
-  
-  analogWrite(motorLeftBackwards,150);
+  leds.fill(RED, 0, 4);
+  leds.show();
+  analogWrite(motorLeftBackwards,200);
   analogWrite(motorLeftForward, 0);
-  analogWrite(motorRightForward, 150);
+  analogWrite(motorRightForward, 200);
   analogWrite(motorRightBackwards,0);
 }
 void rotateCounterAxis()
 {
-  strip.setPixelColor(LEFT_BACK_LED, strip.Color(255, 0, 0));
-  strip.setPixelColor(LEFT_FRONT_LED, strip.Color(255, 0, 0));
-  strip.setPixelColor(RIGHT_BACK_LED, strip.Color(0, 0, 255));
-  strip.setPixelColor(RIGHT_FRONT_LED, strip.Color(0, 0, 255));
-  strip.show();
-  
   analogWrite(motorLeftBackwards,0);
-  analogWrite(motorLeftForward, 150);
+  analogWrite(motorLeftForward, 200);
   analogWrite(motorRightForward, 0);
-  analogWrite(motorRightBackwards,150);
+  analogWrite(motorRightBackwards,200);
 }
-
-void rotatePulses(int nrOfPulses)
+void turnLeftOnPulses(int nrOfPulses)
 {
   stopRobot();
   countLeft=0;
@@ -177,22 +198,22 @@ void rotatePulses(int nrOfPulses)
   boolean isActive = true;
   getDistanceLeft();
   turnLeft();
-  wait(200);
-  while ((countLeft<nrOfPulses && countRight<nrOfPulses) && distanceLeft>=12 && isActive)
+  while ((countLeft<nrOfPulses && countRight<nrOfPulses) && distanceLeft>=10 && isActive)
     {
       if(countLeft == lastCountLeft && countRight == lastCountRight)
       { //wheel has not pulsed yet
-        if(millis() > movementBuffer && distanceLeft < 2)
+        if(millis() > movementBuffer && distanceLeft > 10)
         { //if not moved for duration
           movementBuffer = millis() + movementStuckBufferDelay;
-          moveBackwards();
-          wait(100);
+          leds.fill(WHITE, 0, 4);
+          leds.show();
           moveBackwardsRotate();
-          wait(450);
+          wait(350);
           stopRobot();
         }
       }
-      else{
+      else
+      {
         movementBuffer = millis() + movementStuckBufferDelay;
         lastCountLeft = countLeft;
         lastCountRight = countRight;
@@ -215,19 +236,35 @@ void moveForwardOnPulses(int nrOfPulses)
   moveForward();
   while ((countLeft<nrOfPulses && countRight<nrOfPulses) && isActive)
   {
-    if(countLeft == lastCountLeft || countRight == lastCountRight){ //wheel has not pulsed yet and was && before
-        if(millis() > movementBuffer){ //if not moved for duration
+    if(countLeft == lastCountLeft && countRight == lastCountRight)
+    { //wheel has not pulsed yet
+        if(millis() > movementBuffer)
+        { //if not moved for duration
           movementBuffer = millis() + movementStuckBufferDelay;
+          leds.fill(WHITE, 0, 4);
+          leds.show();
           moveBackwards();
-          wait(300);
+          wait(250);
+          getDistanceLeft();
+          if(distanceLeft > 15)
+          {
+            turnLeftOnPulses(36);
+          }
+          else{
+          moveBackwardsRotate();
+          wait(400);
+          }
+
         }
       }
-      else{
+      else
+      {
         movementBuffer = millis() + movementStuckBufferDelay;
         lastCountLeft = countLeft;
         lastCountRight = countRight;
       }
     getDistanceFront();
+    getDistanceLeft();
   }
   stopRobot();
 }
@@ -255,7 +292,7 @@ void CountB()
 void getDistanceLeft()
 {
   digitalWrite(trigPinLeft, HIGH);
-  delayMicroseconds(10);
+  delayMicroseconds(5);
   digitalWrite(trigPinLeft, LOW);
   // Reads the echoPin, returns the sound wave travel time in microseconds
   durationLeft = pulseIn(echoPinLeft, HIGH);
@@ -266,19 +303,22 @@ void getDistanceLeft()
 void getDistanceFront()
 {  
   digitalWrite(trigPinFront, HIGH);
-  delayMicroseconds(10);
+  delayMicroseconds(5);
   digitalWrite(trigPinFront, LOW);
   // Reads the echoPin, returns the sound wave travel time in microseconds
   durationFront = pulseIn(echoPinFront, HIGH);
   // Calculating the distance
   distanceFront = durationFront * 0.034 / 2;
+  Serial.println(distanceFront);
  
 }
 
-void wait(int waitingTime) {
+void wait(int waitingTime)
+{
   time = millis();
-  while(millis() < time + waitingTime){
-    }
+  while(millis() < time + waitingTime)
+  {
+  }
 }
 
 void gripperServo(int pulse)
@@ -303,18 +343,19 @@ void closeGripper()
 //===[SETUP ]============================
 
 void setup() {
-  strip.begin();
-  strip.show();
-  
-  pinMode(motor_R1, INPUT_PULLUP);
-  pinMode(motor_R2, INPUT_PULLUP);
+  pinMode(motor_R1, INPUT);
+  pinMode(motor_R2, INPUT);
   attachInterrupt(digitalPinToInterrupt(motor_R1),CountA,CHANGE);
   attachInterrupt(digitalPinToInterrupt(motor_R2),CountB,CHANGE);
   pinMode(trigPinFront, OUTPUT);
   pinMode(echoPinFront, INPUT);
-  pinMode(trigPinLeft, OUTPUT); // Sets the trigPin as an Output
-  pinMode(echoPinLeft, INPUT); // Sets the echoPin as an Input
+  pinMode(trigPinLeft, OUTPUT); // Sets the left trigPin as an Output
+  pinMode(echoPinLeft, INPUT); // Sets the left echoPin as an Input
+  setupLineSensors();
   Serial.begin(9600);
+  leds.begin();
+  leds.fill(BLUE,0,4);
+  leds.show();
   countLeft=0;
   countRight=0; 
 }
@@ -322,51 +363,79 @@ void setup() {
 //===[ LOOP ]============================
 
 void loop()
-{   // first - green , second - red, third - blue
-  
-  if(hasStarted){
-//   closeGripper();
+{
+  if(hasStarted)
+  {
+   closeGripper();
    getDistanceLeft();
    getDistanceFront();
-   if (distanceLeft<=12&&distanceFront>=12)
+//   followLine();
+   if(isBlackZone())
    {
-    moveForwardOnPulses(31);
     stopRobot();
-    wait(200);
-    
+    openGripper();
+    wait(300);
+    hasStarted = false;
+    hasInitiatedStart = false;
    }
-   else if(distanceLeft>12 && distanceFront>12)
-    {
-      rotatePulses(50);
-      stopRobot();
-      wait(400);
-      moveForwardOnPulses(20);
-      rotatePulses(50);
-    }
-   else if(distanceLeft<15&&distanceFront<=17)
+   if (distanceLeft<=15&&distanceFront>=12)
    {
-    getDistanceFront();
-    rotateCounterAxis();
-    wait(400); 
-    moveForwardOnPulses(31);
-    }
-    else{
-      moveBackwards();
+    moveForwardOnPulses(10);
+    stopRobot();
+    wait(100);
+   }
+   else if(distanceLeft>15 && distanceFront>12)
+    {
+      turnLeftOnPulses(36);
+      stopRobot();
       wait(300);
+      moveForwardOnPulses(15);
+      turnLeftOnPulses(36);
+      
+      
+    }
+//   else if(distanceLeft<=17&&distanceFront<=10)
+//   {
+//    leds.fill(YELLOW , 0, 4);
+//    leds.show();
+//    getDistanceFront();
+//      moveBackwards();
+//      wait(150);
+//      stopRobot();
+//      rotateCounterAxis();
+//      wait(200); 
+//    }
+    else
+    {
+      leds.fill(YELLOW,0,4);
+      leds.show();
+      moveBackwards();
+      wait(150);
+      stopRobot();
+      rotateCounterAxis();
+      wait(200);
+//      if(distanceFront < 10)
+//      {
+//       rotateCounterAxis();
+//       wait(250);
+//      }      
     }
   }
-  else {
-    if(hasInitiatedStart == true){
+  else 
+  {
+    if(hasInitiatedStart == true)
+    {
       moveForward();
       wait(750);
       closeGripper();
       countLeft=0;
       countRight=0;
-      rotatePulses(80);
+      turnLeftOnPulses(36);
       moveForwardOnPulses(80);
       hasStarted = true;
     }
-    else {
+    else 
+    {
       wait(1000);
       getDistanceFront();
       if(distanceFront < 30){

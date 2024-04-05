@@ -187,6 +187,7 @@ bool blackLineDetectedFor2Seconds() {
 
     return false;
 }
+
 void startObstacleAvoidance() {
   isAvoidingObstacle = true;
   actionStartTime = millis(); 

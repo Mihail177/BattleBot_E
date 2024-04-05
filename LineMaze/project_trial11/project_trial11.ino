@@ -138,6 +138,19 @@ void loop() {
             performLineCountingAndGrabbing();
             } else {
             solveMaze();
+            if (blackLineDetectedFor2Seconds()) {
+              stop();
+              executionStage = 1; 
+            } else if (executionStage == 1) {
+                moveBackward();
+                delay(200);
+                releaseObject();
+                moveBackward();
+                delay(500);
+                executionStage = 2;
+            } else if (executionStage == 2) {
+              stop();
+            } 
         }
    }
 }

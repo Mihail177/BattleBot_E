@@ -4,19 +4,21 @@
 boolean hasInitiatedStart = false;
 boolean hasStarted = false;
 
+//===========[ LineSensors ]================
+
 const int lineSensors[] = {A0, A1, A2, A3, A4,A5, A6, A7};
 int lineSensorSensitivity = 800;
 
-//===[ Gripper ]===================================
+//============[ Gripper ]======================
 const int GRIPPER_PIN=6;
 const int GRIPPER_OPEN_PULSE=1600;
 const int GRIPPER_CLOSE_PULSE=970;
 const int GRIPPER_PULSE_REPEAT=10;
-//===[ Time variables ]=============================
+
+//============[ Time variables ]================
 unsigned long time;
 
-
-//===[ DistanceSensors ]============================
+//===========[ DistanceSensors ]================
 
 long durationFront;
 int distanceFront;
@@ -27,9 +29,8 @@ long durationLeft;
 int distanceLeft;
 const int trigPinLeft = 4;
 const int echoPinLeft = 7;
-int distanceOverride = 0;
 
-//===[ Motor pins ]======================
+//=========[ Motor pins ]=============
 
 const int motorRightBackwards=10;
 const int motorRightForward=9;  
@@ -37,7 +38,7 @@ const int motorLeftBackwards=5;
 const int motorLeftForward=11;
 const int movementStuckBufferDelay=1700;
 
-//===[ Motor tests for pulses ]====================
+//==========[ Motor tests for pulses ]========
 
 const int motor_R1=2;
 const int motor_R2=3;
@@ -47,7 +48,7 @@ int countsLeft=0,previousCountLeft;
 int countsRight=0,previousCountRight;
 
 
-//===[ Led Pixels ]================================
+//===========[ Led Pixels ]====================
 
 const int PIXEL_PIN=13;
 const int PIXEL_NUMBER=4;
@@ -58,7 +59,130 @@ const uint32_t BLUE=leds.Color(0,0,255);
 const uint32_t WHITE=leds.Color(255,255,255);
 const uint32_t START=leds.Color(0,0,0);
 
-//===[ Functions ]=================================
+//===============[ SETUP ]=================
+
+void setup() {
+  pinMode(motor_R1, INPUT);
+  pinMode(motor_R2, INPUT);
+  attachInterrupt(digitalPinToInterrupt(motor_R1),CountA,CHANGE);
+  attachInterrupt(digitalPinToInterrupt(motor_R2),CountB,CHANGE);
+  pinMode(trigPinFront, OUTPUT);
+  pinMode(echoPinFront, INPUT);
+  pinMode(trigPinLeft, OUTPUT); // Sets the left trigPin as an Output
+  pinMode(echoPinLeft, INPUT); // Sets the left echoPin as an Input
+  setupLineSensors();
+  Serial.begin(9600);
+  leds.begin();
+  leds.fill(BLUE,0,4);
+  leds.show();
+  countLeft=0;
+  countRight=0; 
+}
+
+//=========[ LOOP ]=================
+
+void loop()
+{
+  if(hasStarted)
+  {
+   closeGripper();
+   getDistanceLeft();
+   getDistanceFront();
+   //In case that there is a line, follow line
+   followLine();
+   if(isBlackZone())
+   {
+    stopRobot();
+    openGripper();
+    wait(300);
+    hasStarted = false;
+    hasInitiatedStart = false;
+   }
+   if (distanceLeft<=17&&distanceFront>=12)
+   {
+    moveForwardOnPulses(10);
+    wait(100);
+   }
+   else if(distanceLeft>17 && distanceFront>12)
+    {
+      turnLeftOnPulses(36);
+      wait(200);
+      moveForwardOnPulses(15);
+      turnLeftOnPulses(36);
+    }
+    else
+    {
+      leds.fill(YELLOW,0,4);
+      leds.show();
+      moveBackwards();
+      wait(100);
+      stopRobot();
+      while(distanceFront<15)
+      {
+      rotateCounterAxis();
+      getDistanceFront();
+      }    
+    }
+  }
+  else 
+  {
+    if(hasInitiatedStart == true)
+    {
+      moveForward();
+      wait(750);
+      closeGripper();
+      countLeft=0;
+      countRight=0;
+      turnLeftOnPulses(36);
+      moveForwardOnPulses(70);
+      hasStarted = true;
+    }
+    else 
+    {
+      wait(1000);
+      getDistanceFront();
+      if(distanceFront < 30)
+      {
+        openGripper();
+        wait(1500);
+        hasInitiatedStart = true;
+      }
+    }
+  }
+}
+
+//========[ Functions ]=================
+
+void wait(int waitingTime)
+{
+  time = millis();
+  while(millis() < time + waitingTime)
+  {
+  }
+}
+
+//Opening and closing the gripper based on pulses
+void gripperServo(int pulse)
+{
+    for(int i = 0; i < GRIPPER_PULSE_REPEAT; i++)
+    {
+        digitalWrite(GRIPPER_PIN,HIGH);
+        delayMicroseconds(pulse);
+        digitalWrite(GRIPPER_PIN,LOW);
+        delay(20);
+    }
+}
+
+void openGripper()
+{
+    gripperServo(GRIPPER_OPEN_PULSE);
+}
+void closeGripper()
+{
+  gripperServo(GRIPPER_CLOSE_PULSE);
+}
+
+
 
 boolean isBlackZone()
 {
@@ -88,16 +212,17 @@ void setupLineSensors()
  pinMode(A7, INPUT);
 }
 
+// Logic for follow line
 void followLine()
 {
   if(analogRead(lineSensors[2]) > lineSensorSensitivity && analogRead(lineSensors[3]) > lineSensorSensitivity)
   {
     analogWrite(motorLeftForward, 255);
-    analogWrite(motorRightForward, 120);
+    analogWrite(motorRightForward, 140);
   }
   else if(analogRead(lineSensors[4]) > lineSensorSensitivity && analogRead(lineSensors[5]) > lineSensorSensitivity)
   {
-    analogWrite(motorLeftForward, 120);
+    analogWrite(motorLeftForward, 140);
     analogWrite(motorRightForward, 255);
   }
   else if(analogRead(lineSensors[1]) > lineSensorSensitivity && analogRead(lineSensors[2]) > lineSensorSensitivity)
@@ -209,7 +334,7 @@ void turnLeftOnPulses(int nrOfPulses)
       if(countLeft == lastCountLeft && countRight == lastCountRight)
       { //wheel has not pulsed yet
         if(millis() > movementBuffer && distanceLeft > 10)
-        { //if not moved for duration
+        { //if the robot not moved for duration
           movementBuffer = millis() + movementStuckBufferDelay;
           leds.fill(WHITE, 0, 4);
           leds.show();
@@ -256,7 +381,7 @@ void moveForwardOnPulses(int nrOfPulses)
     if(countLeft == lastCountLeft && countRight == lastCountRight)
     { //wheel has not pulsed yet
         if(millis() > movementBuffer)
-        { //if not moved for duration
+        { //if the robot not moved for duration
           movementBuffer = millis() + movementStuckBufferDelay;
           leds.fill(WHITE, 0, 4);
           leds.show();
@@ -264,12 +389,6 @@ void moveForwardOnPulses(int nrOfPulses)
           wait(150);
           moveBackwardsRotate();
           wait(250);
-//          getDistanceLeft();
-//          if(distanceLeft > 25)
-//          {
-//            turnLeftOnPulses(36);
-//          }
-
         }
       }
       else
@@ -282,13 +401,6 @@ void moveForwardOnPulses(int nrOfPulses)
     getDistanceLeft();
   }
   stopRobot();
-}
-void showNrOfPulse()
-{
- Serial.print(countLeft);
- Serial.print(" ");
- Serial.print(countRight);
- Serial.println();
 }
 void CountA()
 {
@@ -324,144 +436,5 @@ void getDistanceFront()
   durationFront = pulseIn(echoPinFront, HIGH);
   // Calculating the distance
   distanceFront = durationFront * 0.034 / 2;
-  Serial.println(distanceFront);
  
-}
-
-void wait(int waitingTime)
-{
-  time = millis();
-  while(millis() < time + waitingTime)
-  {
-  }
-}
-
-void gripperServo(int pulse)
-{
-    for(int i = 0; i < GRIPPER_PULSE_REPEAT;i++)
-    {
-        digitalWrite(GRIPPER_PIN,HIGH);
-        delayMicroseconds(pulse);
-        digitalWrite(GRIPPER_PIN,LOW);
-        delay(20);
-    }
-}
-
-void openGripper()
-{
-    gripperServo(GRIPPER_OPEN_PULSE);
-}
-void closeGripper()
-{
-  gripperServo(GRIPPER_CLOSE_PULSE);
-}
-//===[SETUP ]============================
-
-void setup() {
-  pinMode(motor_R1, INPUT);
-  pinMode(motor_R2, INPUT);
-  attachInterrupt(digitalPinToInterrupt(motor_R1),CountA,CHANGE);
-  attachInterrupt(digitalPinToInterrupt(motor_R2),CountB,CHANGE);
-  pinMode(trigPinFront, OUTPUT);
-  pinMode(echoPinFront, INPUT);
-  pinMode(trigPinLeft, OUTPUT); // Sets the left trigPin as an Output
-  pinMode(echoPinLeft, INPUT); // Sets the left echoPin as an Input
-  setupLineSensors();
-  Serial.begin(9600);
-  leds.begin();
-  leds.fill(BLUE,0,4);
-  leds.show();
-  countLeft=0;
-  countRight=0; 
-}
-
-//===[ LOOP ]============================
-
-void loop()
-{
-  if(hasStarted)
-  {
-   closeGripper();
-   getDistanceLeft();
-   getDistanceFront();
-   followLine();
-   if(isBlackZone())
-   {
-    stopRobot();
-    openGripper();
-    wait(300);
-    hasStarted = false;
-    hasInitiatedStart = false;
-   }
-   if (distanceLeft<=17&&distanceFront>=12)
-   {
-    moveForwardOnPulses(10);
-//    stopRobot();
-    wait(100);
-   }
-   else if(distanceLeft>17 && distanceFront>12)
-    {
-      turnLeftOnPulses(36);
-//      stopRobot();
-      wait(200);
-      moveForwardOnPulses(15);
-      turnLeftOnPulses(36);
-      
-      
-    }
-//   else if(distanceLeft<=17&&distanceFront<=10)
-//   {
-//    leds.fill(YELLOW , 0, 4);
-//    leds.show();
-//    getDistanceFront();
-//      moveBackwards();
-//      wait(150);
-//      stopRobot();
-//      rotateCounterAxis();
-//      wait(200); 
-//    }
-    else
-    {
-      leds.fill(YELLOW,0,4);
-      leds.show();
-      moveBackwards();
-      wait(100);
-      stopRobot();
-      while(distanceFront<15)
-      {
-      rotateCounterAxis();
-      getDistanceFront();
-      }
-//      getDistanceLeft();
-//      if(distanceFront < 10)
-//      {
-//       rotateCounterAxis();
-//       wait(250);
-//      }      
-    }
-  }
-  else 
-  {
-    if(hasInitiatedStart == true)
-    {
-      moveForward();
-      wait(750);
-      closeGripper();
-      countLeft=0;
-      countRight=0;
-      turnLeftOnPulses(36);
-      moveForwardOnPulses(80);
-      hasStarted = true;
-    }
-    else 
-    {
-      wait(1000);
-      getDistanceFront();
-      if(distanceFront < 30){
-        openGripper();
-        wait(1500);
-        hasInitiatedStart = true;
-      }
-    }
-  }
 }
